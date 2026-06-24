@@ -106,12 +106,4 @@ public class CampaignController {
     campaignsService.deleteCampaign(campaignId);
     return ApiResponse.success("Xóa chiến dịch thành công");
   }
-
-  @GetMapping("/events")
-  @PreAuthorize("hasRole('ADMIN')")
-  public ApiResponse<List<com.promoguard.demo.dto.response.OutboxMessage>> getLatestEvents(
-      @RequestParam(defaultValue = "20") int limit
-  ) {
-    return ApiResponse.success(campaignsService.getLatestEvents(limit));
-  }
 }

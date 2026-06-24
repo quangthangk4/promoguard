@@ -22,5 +22,4 @@ public interface CampaignsService {
   List<AdminClaimResponse> getCampaignClaims(UUID campaignId, int limit, int offset);
   CampaignResponse updateCampaign(UUID campaignId, UpdateCampaignRequest request);
   void deleteCampaign(UUID campaignId);
-  List<com.promoguard.demo.dto.response.OutboxMessage> getLatestEvents(int limit);
 }

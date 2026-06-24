@@ -251,6 +251,8 @@ services:
   nginx-exporter:
     image: nginx/nginx-prometheus-exporter:1.1.0
     container_name: promoguard-nginx-exporter
+    profiles:
+      - full
     command: ["-nginx.scrape-uri=http://nginx:80/nginx_status"]
     ports:
       - "9113:9113"

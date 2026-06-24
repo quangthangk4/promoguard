@@ -15,7 +15,6 @@ import com.promoguard.demo.repository.CampaignsRepository;
 import com.promoguard.demo.dto.response.UserClaimResponse;
 import com.promoguard.demo.service.CampaignsService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.promoguard.demo.repository.OutboxRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -36,7 +35,6 @@ public class CampaignsServiceImpl implements CampaignsService {
 
   private final CampaignsRepository campaignsRepository;
   private final CurrentUserPort currentUserPort;
-  private final OutboxRepository outboxRepository;
   private final ObjectMapper objectMapper;
   private final StringRedisTemplate redisTemplate;
   private final KafkaTemplate<String, String> kafkaTemplate;
@@ -82,13 +80,11 @@ public class CampaignsServiceImpl implements CampaignsService {
   public CampaignsServiceImpl(
       CampaignsRepository campaignsRepository,
       CurrentUserPort currentUserPort,
-      OutboxRepository outboxRepository,
       StringRedisTemplate redisTemplate,
       KafkaTemplate<String, String> kafkaTemplate
   ) {
     this.campaignsRepository = campaignsRepository;
     this.currentUserPort = currentUserPort;
-    this.outboxRepository = outboxRepository;
     this.redisTemplate = redisTemplate;
     this.kafkaTemplate = kafkaTemplate;
     this.objectMapper = new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
@@ -129,6 +125,16 @@ public class CampaignsServiceImpl implements CampaignsService {
     Instant now = Instant.now();
     if (campaign.status() != CampaignStatus.ACTIVE || now.isBefore(campaign.startTime()) || now.isAfter(campaign.endTime())) {
       throw new ClaimException(ClaimResult.CAMPAIGN_NOT_ACTIVE);
+    }
+
+    // 2b. Warm up cache if stock key is missing (e.g. Redis restarted or key evicted)
+    try {
+      Boolean hasStock = redisTemplate.hasKey(stockKey);
+      if (hasStock == null || !hasStock) {
+        warmupCampaignCache(campaignId, campaign.remainingQuantity());
+      }
+    } catch (Exception e) {
+      log.error("Error checking Redis stock key existence", e);
     }
 
     // 3. Perform atomic decrement and duplicate claim check in Redis via Lua Script
@@ -182,6 +188,25 @@ public class CampaignsServiceImpl implements CampaignsService {
       );
     } catch (Exception e) {
       log.error("Failed to revert Redis claim state", e);
+    }
+  }
+
+  private void warmupCampaignCache(UUID campaignId, int dbRemainingQuantity) {
+    String stockKey = "campaign:" + campaignId + ":stock";
+    String claimedKey = "campaign:" + campaignId + ":claimed_users";
+
+    try {
+      List<UUID> claimedUserIds = campaignsRepository.findClaimedUserIds(campaignId);
+      redisTemplate.opsForValue().setIfAbsent(stockKey, String.valueOf(dbRemainingQuantity));
+
+      if (!claimedUserIds.isEmpty()) {
+        String[] userIds = claimedUserIds.stream().map(UUID::toString).toArray(String[]::new);
+        redisTemplate.opsForSet().add(claimedKey, userIds);
+      }
+      log.info("Successfully warmed up Redis cache for campaign {}: stock={}, claimedUsersCount={}", 
+          campaignId, dbRemainingQuantity, claimedUserIds.size());
+    } catch (Exception e) {
+      log.error("Failed to warmup Redis cache for campaign {}", campaignId, e);
     }
   }
 
@@ -279,8 +304,4 @@ public class CampaignsServiceImpl implements CampaignsService {
     }
   }
 
-  @Override
-  public List<com.promoguard.demo.dto.response.OutboxMessage> getLatestEvents(int limit) {
-    return outboxRepository.findLatest(limit);
-  }
 }

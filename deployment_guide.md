@@ -1,150 +1,104 @@
-# Hướng dẫn Triển khai Hệ thống PromoGuard lên VPS
+ ### Bước 1: Mở Port trên Security Group của AWS (Bắt buộc)
 
-Tài liệu này hướng dẫn chi tiết quy trình triển khai hệ thống **PromoGuard** lên máy chủ ảo VPS (khuyên dùng hệ điều hành Ubuntu Server 22.04 LTS hoặc 24.04 LTS).
+  Mặc định AWS khóa hầu hết các cổng kết nối. Bạn cần truy cập vào trang quản trị AWS EC2 Console -> chọn Instance
+  của bạn -> vào tab Security -> chọn Security Group và thêm các luật (Inbound Rules) sau:
 
----
+  •  SSH  (Port 22): Cho phép IP của bạn truy cập để gõ lệnh.
+  •  HTTP  (Port 80) &  HTTPS  (Port 443): Cho phép mọi IP truy cập (0.0.0.0/0) để Nginx định tuyến.
+  •  Custom TCP  (Port 3000): Cho phép IP của bạn truy cập để xem dashboard Grafana.
+  •  Custom TCP  (Port 8082): Cho phép IP của bạn truy cập Keycloak Admin Console (để cấu hình ban đầu).
+  ──────
+  ### Bước 2: Truy cập vào VPS qua SSH
 
-## 1. Chuẩn bị Hạ tầng VPS & Tối ưu hóa Bộ nhớ
+  Mở Terminal trên máy tính (hoặc Git Bash/PowerShell) và chạy lệnh:
 
-Hệ thống của chúng ta chạy đồng thời nhiều container nặng như **Keycloak**, **Kafka**, **Postgres**, **Redis**, **Spring Boot App** cùng **4 Exporters**.
+    ssh -i "duong/dan/toi/file-key-aws.pem" ubuntu@IP_PUBLIC_CUA_VPS
 
-*   **Cấu hình khuyến nghị:** Tối thiểu 2 vCPU / 4GB RAM.
-*   **Mẹo tối ưu bộ nhớ (Crucial Senior Tip):** Với VPS 4GB RAM, khi chạy đồng loạt các container này hệ thống rất dễ gặp tình trạng Out-Of-Memory (OOM) khiến các container tự động bị tắt (thường là Keycloak hoặc Kafka). Hãy cấu hình **4GB Virtual Memory (SWAP)** để hệ thống chạy ổn định 100%:
+  (Nếu bạn dùng hệ điều hành khác Ubuntu trên AWS, user có thể là  ec2-user  hoặc  admin ).
+  ──────
+  ### Bước 3: Cài đặt Docker & Docker Compose trên VPS
 
-### Thiết lập SWAP trên VPS (Ubuntu):
-Chạy các lệnh sau với quyền `root` trên VPS:
-```bash
-# 1. Tạo file swap kích thước 4GB
-sudo fallocate -l 4G /swapfile
+  Sau khi đã SSH vào VPS thành công, bạn chạy các lệnh sau để cài đặt Docker:
+    # Cập nhật các gói phần mềm hệ thống
+    sudo apt update && sudo apt upgrade -y
 
-# 2. Phân quyền chỉ cho root truy cập
-sudo chmod 600 /swapfile
+    # Tải và chạy script cài đặt Docker chính thức
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
 
-# 3. Định dạng file thành swap space
-sudo mkswap /swapfile
+    # Cài đặt docker-compose plugin
+    sudo apt install docker-compose-plugin -y
 
-# 4. Kích hoạt swap
-sudo swapon /swapfile
+    # Phân quyền cho user ubuntu chạy docker không cần sudo (tiện lợi hơn)
+    sudo usermod -aG docker ubuntu
 
-# 5. Cấu hình tự động mount swap khi reboot VPS
-echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+    # Khởi động lại session SSH để phân quyền docker có hiệu lực
+    exit
 
-# 6. Kiểm tra lại hoạt động
-free -h
-```
+  Sau đó thực hiện SSH lại vào VPS.
+  ──────
+  ### Bước 4: Chuyển mã nguồn và File JAR từ Local lên VPS
+  Vì hệ thống dùng JOOQ để sinh code (cần kết nối DB local khi compile), cách chuẩn nhất là bạn biên dịch (build)
+  file JAR ở máy local, sau đó đẩy tệp JAR này lên VPS.
 
----
+  #### 1. Trên máy Local (máy tính của bạn):
+  Mở terminal tại thư mục  PromoGuard-BE  và build file JAR:
+    .\mvnw.cmd clean package -DskipTests
 
-## 2. Cài đặt Docker & Docker Compose trên VPS
+  Lệnh này sẽ tạo ra tệp  demo-0.0.1-SNAPSHOT.jar  trong thư mục  target .
 
-Chạy script cài đặt nhanh chính thức từ Docker trên VPS:
-```bash
-# Cập nhật hệ thống
-sudo apt update && sudo apt upgrade -y
+  #### 2. Trên VPS:
 
-# Cài đặt Docker
-curl -fsSL https://get.docker.com -o get-docker.sh
-sudo sh get-docker.sh
+  Tải thư mục dự án (chứa  docker-compose.yml , thư mục  deploy ) lên VPS. Bạn có thể dùng  Git clone  từ repository
+  của bạn:
 
-# Cài đặt Docker Compose plugin
-sudo apt install docker-compose-plugin -y
+    # Clone dự án về thư mục home của VPS
+    git clone <URL_REPOSITORY_CUA_BAN> promoguard
+    cd promoguard
 
-# Kiểm tra phiên bản cài đặt thành công
-docker --version
-docker compose version
-```
+    # Tạo thư mục target trống bên trong BE để chứa file JAR sắp đẩy lên
+    mkdir -p PromoGuard-BE/target
 
----
+  #### 3. Đẩy file JAR từ Local lên VPS:
 
-## 3. Quy trình Đóng gói & Chuyển mã nguồn lên VPS
+  Mở một terminal mới trên máy local của bạn, đứng tại thư mục  PromoGuard-BE  và chạy lệnh gửi file:
 
-Vì quá trình biên dịch Maven (`mvnw clean package`) cần kết nối DB để sinh code JOOQ, ta sẽ build file JAR ở **máy local** của bạn, sau đó đẩy lên VPS.
+    scp -i "duong/dan/file-key-aws.pem" target/demo-0.0.1-SNAPSHOT.jar
+  ubuntu@IP_PUBLIC_CUA_VPS:/home/ubuntu/promoguard/PromoGuard-BE/target/
+    ──────
+  ### Bước 5: Cấu hình File  .env  trên VPS
 
-### Bước 1: Build file JAR tại máy local
-Chạy lệnh sau tại thư mục `PromoGuard-BE` trên máy local (đảm bảo container postgres local đang chạy):
-```powershell
-.\mvnw.cmd clean package -DskipTests
-```
-Lệnh này sẽ tạo ra tệp JAR tại thư mục `target/demo-0.0.1-SNAPSHOT.jar`.
+  Trên VPS, tạo file  .env  tại thư mục  /home/ubuntu/promoguard :
 
-### Bước 2: Đẩy mã nguồn lên VPS
-Bạn có thể sử dụng Git hoặc lệnh `scp` để chuyển tệp lên VPS. Cách đơn giản nhất:
-1.  **Git clone** dự án từ repository của bạn lên VPS.
-2.  Đẩy file JAR mới build lên thư mục `PromoGuard-BE/target/` trên VPS thông qua công cụ SFTP (FileZilla/MobaXterm) hoặc dùng lệnh `scp` từ máy local:
-    ```powershell
-    scp target/demo-0.0.1-SNAPSHOT.jar user@vps_ip:/path/to/project/PromoGuard-BE/target/
-    ```
+    nano .env
 
----
+  Nhập nội dung cấu hình sau:
 
-## 4. Thiết lập File Môi trường `.env` trên VPS
+    # IP Public của VPS AWS
+    VPS_IP=IP_PUBLIC_CUA_VPS
 
-Tạo một file `.env` tại thư mục gốc của dự án trên VPS để định cấu hình các tham số sản xuất (Production config):
+    # Thông tin Database
+    POSTGRES_DB=promoguard
+    POSTGRES_USER=promoguard
+    POSTGRES_PASSWORD=MatKhauBaoMatCuaBan
 
-```env
-# IP hoặc Tên miền của VPS
-VPS_IP=your_vps_ip_or_domain
+    # Redis
+    REDIS_PORT=6379
 
-# Database Credentials
-POSTGRES_DB=promoguard
-POSTGRES_USER=promoguard
-POSTGRES_PASSWORD=MatKhauBaoMatCuaBan
+    # Active Profile
+    SPRING_PROFILES_ACTIVE=production
 
-# Redis Configuration
-REDIS_PORT=6379
+  Nhấn  Ctrl + O  để lưu,  Enter  và  Ctrl + X  để thoát.
+  ──────
+  ### Bước 6: Khởi chạy ứng dụng
+  Chạy lệnh khởi động Docker Compose ngay tại thư mục chứa tệp  docker-compose.yml  trên VPS:
+    docker compose --profile full up -d --build
 
-# Profile Spring Boot hoạt động
-SPRING_PROFILES_ACTIVE=production
-```
-
-> [!WARNING]
-> Cần thay đổi mật khẩu mặc định của Postgres trong file `.env` và cập nhật tương ứng các URL kết nối của ứng dụng.
-
----
-
-## 5. Trỏ Domain & Thiết lập SSL (HTTPS) cho Nginx
-
-Để hệ thống chạy qua giao thức HTTPS bảo mật bằng Cloudflare (Khuyên dùng):
-
-1.  **Cấu hình DNS:** Truy cập trang quản trị Domain (như Cloudflare, GoDaddy), tạo một bản ghi **A Record** trỏ tên miền (ví dụ `promoguard.yourdomain.com`) về IP của VPS.
-2.  **Bật Proxy Cloudflare:** Bật biểu tượng đám mây màu vàng (Proxied) trên Cloudflare DNS.
-3.  **Cấu hình SSL trên Cloudflare:** Chọn chế độ mã hóa SSL/TLS là **Full** hoặc **Flexible**. Điều này giúp mã hóa HTTPS từ Client đến Cloudflare, và Cloudflare sẽ định tuyến an toàn tới cổng 80 của Nginx trên VPS.
-
----
-
-## 6. Khởi chạy Hệ thống trên VPS
-
-Di chuyển đến thư mục gốc chứa tệp `docker-compose.yml` trên VPS và kích hoạt:
-
-```bash
-# Khởi chạy các cơ sở dữ liệu và Kafka (không chạy app/nginx profile)
-docker compose up -d
-
-# Nếu muốn build và khởi chạy ứng dụng (Backend app + Nginx proxy):
-docker compose --profile full up -d --build
-```
-
-Kiểm tra trạng thái hoạt động của các container:
-```bash
-docker ps
-```
-
----
-
-## 7. Cấu hình Realm Keycloak trên VPS
-
-1.  Truy cập Keycloak Admin Portal tại địa chỉ: `http://<your_vps_ip_or_domain>:8082` (Đăng nhập bằng tài khoản admin thiết lập trong file docker-compose).
-2.  Tạo mới một Realm bằng cách nhấn **Import Realm**.
-3.  Chọn tệp cấu hình Realm đã xuất sẵn (từ thư mục `deploy/keycloak/import/`) để khôi phục toàn bộ cấu hình Client (`promoguard-web`), các vai trò (Roles) và các tài khoản người dùng thử nghiệm.
-
----
-
-## 8. Kiểm tra Giám sát Grafana
-
-*   Truy cập Grafana tại `http://<your_vps_ip_or_domain>:3000`.
-*   Truy cập mục **Data Sources** kiểm tra kết nối với Prometheus (`http://prometheus:9090`).
-*   Nhập (Import) các Dashboards tương ứng với Exporters để theo dõi:
-    *   **Postgres Dashboard:** ID `9628` (dành cho postgres-exporter).
-    *   **Redis Dashboard:** ID `11833` (dành cho redis-exporter).
-    *   **JVM Dashboard:** ID `4701` (dành cho Micrometer Spring Boot).
-    *   **Nginx Dashboard:** ID `12708` (dành cho nginx-prometheus-exporter).
+  Lệnh này sẽ tải các image cần thiết, build Docker image cho Spring Boot và chạy toàn bộ dịch vụ ngầm ( -d ).
+  ──────
+  ### Bước 7: Cấu hình Realm Keycloak trên VPS
+  1. Mở trình duyệt trên máy local, truy cập:  http://IP_PUBLIC_CUA_VPS:8082
+  2. Đăng nhập Keycloak với tài khoản admin (xem cấu hình username/password admin của keycloak trong file  docker-
+  compose.yml  của bạn, thường mặc định là  admin / admin ).
+  3. Nhấp vào góc trên bên trái (phần chọn Realm) -> chọn Create Realm -> Chọn Browse và tải lên file cấu hình Realm
+  đã export sẵn tại đường dẫn thư mục  deploy/keycloak/import/  để tự động phục hồi cấu hình client, vai trò và user.

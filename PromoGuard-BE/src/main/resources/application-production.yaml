@@ -35,4 +35,10 @@ management:
 
 app:
   keycloak:
-    client-id: promo-guard-app
+    client-id: promoguard-web
+
+springdoc:
+  swagger-ui:
+    oauth:
+      client-id: promoguard-web
+      use-pkce-with-authorization-code-grant: true

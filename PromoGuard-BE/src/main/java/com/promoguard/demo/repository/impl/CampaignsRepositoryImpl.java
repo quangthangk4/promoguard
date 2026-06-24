@@ -217,4 +217,12 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
         .execute();
     return deleted > 0;
   }
+
+  @Override
+  public List<UUID> findClaimedUserIds(UUID campaignId) {
+    return dsl.select(VOUCHER_CLAIMS.USER_ID)
+        .from(VOUCHER_CLAIMS)
+        .where(VOUCHER_CLAIMS.CAMPAIGN_ID.eq(campaignId))
+        .fetch(VOUCHER_CLAIMS.USER_ID);
+  }
 }

@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.promoguard.demo.dto.event.VoucherClaimedEvent;
 import com.promoguard.demo.repository.CampaignsRepository;
-import com.promoguard.demo.repository.OutboxRepository;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,15 +18,12 @@ public class VoucherClaimConsumer {
   private static final Logger log = LoggerFactory.getLogger(VoucherClaimConsumer.class);
 
   private final CampaignsRepository campaignsRepository;
-  private final OutboxRepository outboxRepository;
   private final ObjectMapper objectMapper;
 
   public VoucherClaimConsumer(
-      CampaignsRepository campaignsRepository,
-      OutboxRepository outboxRepository
+      CampaignsRepository campaignsRepository
   ) {
     this.campaignsRepository = campaignsRepository;
-    this.outboxRepository = outboxRepository;
     this.objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
   }
 
@@ -55,8 +51,6 @@ public class VoucherClaimConsumer {
         return; // Idempotent success (avoid double insert and double decrement)
       }
 
-      // 3. Save to Outbox as PROCESSED so Admin UI is updated and shows it as processed event
-      outboxRepository.save(UUID.randomUUID(), "Campaign", event.campaignId().toString(), "VoucherClaimed", payload, "PROCESSED");
       log.info("Successfully recorded voucher claim for user {} and campaign {} in DB", event.userId(), event.campaignId());
       
     } catch (Exception e) {

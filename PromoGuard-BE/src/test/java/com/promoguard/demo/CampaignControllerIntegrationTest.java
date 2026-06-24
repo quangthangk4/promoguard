@@ -1,6 +1,5 @@
 package com.promoguard.demo;
 
-import static com.promoguard.demo.jooq.Tables.OUTBOX_MESSAGES;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -39,9 +38,6 @@ class CampaignControllerIntegrationTest {
   private WebApplicationContext webApplicationContext;
 
   private final ObjectMapper objectMapper = new ObjectMapper();
-
-  @Autowired
-  private com.promoguard.demo.repository.OutboxRepository outboxRepository;
 
   @Autowired
   private DSLContext dslContext;
@@ -316,13 +312,13 @@ class CampaignControllerIntegrationTest {
   }
 
   @Test
-  void testOutboxPattern_ClaimVoucher() throws Exception {
+  void testAsyncVoucherClaim_PersistedToDb() throws Exception {
     UUID userId = UUID.randomUUID();
 
     // 1. Create a campaign
     String createRequestJson = """
         {
-          "name": "Outbox Campaign",
+          "name": "Async Claim Campaign",
           "totalQuantity": 5,
           "startTime": "%s",
           "endTime": "%s",
@@ -350,21 +346,22 @@ class CampaignControllerIntegrationTest {
             .with(jwt().jwt(builder -> builder.subject(userId.toString()).claim("preferred_username", "testuser"))))
         .andExpect(status().isOk());
 
-    // 3. Wait up to 5 seconds for the outbox message to be processed and status updated to PROCESSED
-    boolean processed = false;
+    // 3. Wait up to 5 seconds for the claim to be written to VOUCHER_CLAIMS table by Kafka consumer
+    boolean claimed = false;
     for (int i = 0; i < 50; i++) {
-      String status = dslContext.select(OUTBOX_MESSAGES.STATUS)
-          .from(OUTBOX_MESSAGES)
-          .where(OUTBOX_MESSAGES.AGGREGATE_ID.eq(campaignId.toString()))
-          .fetchOne(OUTBOX_MESSAGES.STATUS);
+      int count = dslContext.selectCount()
+          .from(com.promoguard.demo.jooq.Tables.VOUCHER_CLAIMS)
+          .where(com.promoguard.demo.jooq.Tables.VOUCHER_CLAIMS.CAMPAIGN_ID.eq(campaignId))
+          .and(com.promoguard.demo.jooq.Tables.VOUCHER_CLAIMS.USER_ID.eq(userId))
+          .fetchOne(0, Integer.class);
 
-      if ("PROCESSED".equals(status)) {
-        processed = true;
+      if (count > 0) {
+        claimed = true;
         break;
       }
       Thread.sleep(100);
     }
 
-    org.junit.jupiter.api.Assertions.assertTrue(processed, "Outbox message should be processed and updated to PROCESSED status");
+    org.junit.jupiter.api.Assertions.assertTrue(claimed, "Voucher claim should be asynchronously saved to the database by the Kafka consumer");
   }
 }

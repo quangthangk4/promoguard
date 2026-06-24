@@ -24,4 +24,5 @@ public interface CampaignsRepository {
   Optional<CampaignResponse> updateCampaign(UUID campaignId, UpdateCampaignRequest request);
   boolean deleteById(UUID campaignId);
   void incrementStock(UUID id);
+  List<UUID> findClaimedUserIds(UUID campaignId);
 }
