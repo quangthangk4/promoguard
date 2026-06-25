@@ -15,7 +15,7 @@ scrape_configs:
     metrics_path: '/metrics'
     static_configs:
       - targets:
-          - 'keycloak:8080'
+          - 'keycloak:9000'
         labels:
           application: 'keycloak'
 
