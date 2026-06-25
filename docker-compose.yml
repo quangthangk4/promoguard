@@ -240,6 +240,7 @@ services:
   kafka-exporter:
     image: danielqsj/kafka-exporter:v1.7.0
     container_name: promoguard-kafka-exporter
+    restart: on-failure
     command: ["--kafka.server=kafka:9092"]
     ports:
       - "9308:9308"

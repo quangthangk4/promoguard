@@ -148,6 +148,12 @@
 			<artifactId>testcontainers-postgresql</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>io.gatling.highcharts</groupId>
+			<artifactId>gatling-charts-highcharts</artifactId>
+			<version>3.11.5</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -187,6 +193,14 @@
 							<directory>target/generated-sources/jooq</directory>
 						</target>
 					</generator>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>io.gatling</groupId>
+				<artifactId>gatling-maven-plugin</artifactId>
+				<version>4.9.2</version>
+				<configuration>
+					<simulationClass>com.promoguard.demo.simulation.VoucherClaimSimulation</simulationClass>
 				</configuration>
 			</plugin>
 		</plugins>

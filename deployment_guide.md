@@ -1,104 +1,72 @@
- ### Bước 1: Mở Port trên Security Group của AWS (Bắt buộc)
-
-  Mặc định AWS khóa hầu hết các cổng kết nối. Bạn cần truy cập vào trang quản trị AWS EC2 Console -> chọn Instance
-  của bạn -> vào tab Security -> chọn Security Group và thêm các luật (Inbound Rules) sau:
-
-  •  SSH  (Port 22): Cho phép IP của bạn truy cập để gõ lệnh.
-  •  HTTP  (Port 80) &  HTTPS  (Port 443): Cho phép mọi IP truy cập (0.0.0.0/0) để Nginx định tuyến.
-  •  Custom TCP  (Port 3000): Cho phép IP của bạn truy cập để xem dashboard Grafana.
-  •  Custom TCP  (Port 8082): Cho phép IP của bạn truy cập Keycloak Admin Console (để cấu hình ban đầu).
+Preparing the Blueprint
+  Dưới đây là cẩm nang hướng dẫn toàn bộ quy trình từ Build local -> Upload -> Deploy từ đầu trên VPS.
   ──────
-  ### Bước 2: Truy cập vào VPS qua SSH
+  ### PHẦN 1: BUILD LẠI FILE JAR TẠI MÁY LOCAL
+  Mở PowerShell trên máy local của bạn tại thư mục gốc  C:\Users\thang\OneDrive\Desktop\PromoGuard :
 
-  Mở Terminal trên máy tính (hoặc Git Bash/PowerShell) và chạy lệnh:
+    # 1. Di chuyển vào thư mục Backend
+    cd PromoGuard-BE
 
-    ssh -i "duong/dan/toi/file-key-aws.pem" ubuntu@IP_PUBLIC_CUA_VPS
+    # 2. Dọn dẹp và đóng gói lại dự án (bỏ qua chạy test để build nhanh hơn)
+    .\mvnw clean package -DskipTests
 
-  (Nếu bạn dùng hệ điều hành khác Ubuntu trên AWS, user có thể là  ec2-user  hoặc  admin ).
+    # 3. Quay trở ra thư mục gốc
+    cd ..
+
+  Kết quả: Bạn sẽ có một file JAR sạch sẽ không còn outbox tại đường dẫn  PromoGuard-BE/target/demo-0.0.1-SNAPSHOT.jar .
   ──────
-  ### Bước 3: Cài đặt Docker & Docker Compose trên VPS
+  ### PHẦN 2: ĐƯA CÁC FILE LÊN VPS (SCP)
 
-  Sau khi đã SSH vào VPS thành công, bạn chạy các lệnh sau để cài đặt Docker:
-    # Cập nhật các gói phần mềm hệ thống
-    sudo apt update && sudo apt upgrade -y
+  Vẫn đứng tại thư mục gốc  C:\Users\thang\OneDrive\Desktop\PromoGuard  trên máy local (nơi có file khoá  promoguardKey.pem ), chạy các lệnh
+  sau:
 
-    # Tải và chạy script cài đặt Docker chính thức
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
+    # 1. Đảm bảo cấu trúc thư mục trên VPS đã sẵn sàng
+    ssh -i promoguardKey.pem ubuntu@56.10.12.163 "mkdir -p ~/promoguard/PromoGuard-BE/target ~/promoguard/deploy/keycloak/import"
 
-    # Cài đặt docker-compose plugin
-    sudo apt install docker-compose-plugin -y
+    # 2. Upload file JAR mới lên VPS
+    scp -i promoguardKey.pem PromoGuard-BE/target/demo-0.0.1-SNAPSHOT.jar ubuntu@56.10.12.163:~/promoguard/PromoGuard-BE/target/
 
-    # Phân quyền cho user ubuntu chạy docker không cần sudo (tiện lợi hơn)
-    sudo usermod -aG docker ubuntu
+    # 3. Upload file cấu hình docker-compose.yml mới lên VPS
+    scp -i promoguardKey.pem docker-compose.yml ubuntu@56.10.12.163:~/promoguard/
 
-    # Khởi động lại session SSH để phân quyền docker có hiệu lực
-    exit
-
-  Sau đó thực hiện SSH lại vào VPS.
-  ──────
-  ### Bước 4: Chuyển mã nguồn và File JAR từ Local lên VPS
-  Vì hệ thống dùng JOOQ để sinh code (cần kết nối DB local khi compile), cách chuẩn nhất là bạn biên dịch (build)
-  file JAR ở máy local, sau đó đẩy tệp JAR này lên VPS.
-
-  #### 1. Trên máy Local (máy tính của bạn):
-  Mở terminal tại thư mục  PromoGuard-BE  và build file JAR:
-    .\mvnw.cmd clean package -DskipTests
-
-  Lệnh này sẽ tạo ra tệp  demo-0.0.1-SNAPSHOT.jar  trong thư mục  target .
-
-  #### 2. Trên VPS:
-
-  Tải thư mục dự án (chứa  docker-compose.yml , thư mục  deploy ) lên VPS. Bạn có thể dùng  Git clone  từ repository
-  của bạn:
-
-    # Clone dự án về thư mục home của VPS
-    git clone <URL_REPOSITORY_CUA_BAN> promoguard
-    cd promoguard
-
-    # Tạo thư mục target trống bên trong BE để chứa file JAR sắp đẩy lên
-    mkdir -p PromoGuard-BE/target
-
-  #### 3. Đẩy file JAR từ Local lên VPS:
-
-  Mở một terminal mới trên máy local của bạn, đứng tại thư mục  PromoGuard-BE  và chạy lệnh gửi file:
-
-    scp -i "duong/dan/file-key-aws.pem" target/demo-0.0.1-SNAPSHOT.jar
-  ubuntu@IP_PUBLIC_CUA_VPS:/home/ubuntu/promoguard/PromoGuard-BE/target/
+    # 4. Upload file export cấu hình Keycloak lên VPS
+    scp -i promoguardKey.pem deploy/keycloak/import/promoguard-realm.json ubuntu@56.10.12.163:~/promoguard/deploy/keycloak/import/
     ──────
-  ### Bước 5: Cấu hình File  .env  trên VPS
+  ### PHẦN 3: DEPLOY LẠI TỪ ĐẦU TRÊN VPS
 
-  Trên VPS, tạo file  .env  tại thư mục  /home/ubuntu/promoguard :
+  Bước 1: SSH vào VPS:
 
-    nano .env
+    ssh -i promoguardKey.pem ubuntu@56.10.12.163
 
-  Nhập nội dung cấu hình sau:
+  Bước 2: Xoá sạch cụm cũ (bao gồm cả database trống cũ để khởi tạo mới hoàn toàn):
 
-    # IP Public của VPS AWS
-    VPS_IP=IP_PUBLIC_CUA_VPS
+    cd ~/promoguard
 
-    # Thông tin Database
-    POSTGRES_DB=promoguard
-    POSTGRES_USER=promoguard
-    POSTGRES_PASSWORD=MatKhauBaoMatCuaBan
+    # Lệnh này sẽ xoá các container cũ và xoá sạch dữ liệu các Volume cũ (-v) để tránh lỗi lệch cấu hình
+    docker compose --profile full down -v
 
-    # Redis
-    REDIS_PORT=6379
+  Bước 3: Khởi chạy cụm dịch vụ mới:
 
-    # Active Profile
-    SPRING_PROFILES_ACTIVE=production
-
-  Nhấn  Ctrl + O  để lưu,  Enter  và  Ctrl + X  để thoát.
-  ──────
-  ### Bước 6: Khởi chạy ứng dụng
-  Chạy lệnh khởi động Docker Compose ngay tại thư mục chứa tệp  docker-compose.yml  trên VPS:
     docker compose --profile full up -d --build
 
-  Lệnh này sẽ tải các image cần thiết, build Docker image cho Spring Boot và chạy toàn bộ dịch vụ ngầm ( -d ).
-  ──────
-  ### Bước 7: Cấu hình Realm Keycloak trên VPS
-  1. Mở trình duyệt trên máy local, truy cập:  http://IP_PUBLIC_CUA_VPS:8082
-  2. Đăng nhập Keycloak với tài khoản admin (xem cấu hình username/password admin của keycloak trong file  docker-
-  compose.yml  của bạn, thường mặc định là  admin / admin ).
-  3. Nhấp vào góc trên bên trái (phần chọn Realm) -> chọn Create Realm -> Chọn Browse và tải lên file cấu hình Realm
-  đã export sẵn tại đường dẫn thư mục  deploy/keycloak/import/  để tự động phục hồi cấu hình client, vai trò và user.
+  (Docker Compose sẽ tự động nhận file  promoguard-realm.json  để cấu hình sẵn Keycloak khi khởi chạy).
+
+  Bước 4: Tắt tính năng ép buộc HTTPS của Keycloak trên VPS:
+  Sau khi chạy lệnh khởi động khoảng 15 - 20 giây (chờ Keycloak tạo xong database), bạn chạy lệnh sau trên VPS:
+
+    # 1. Tắt ép buộc HTTPS trong DB của Keycloak
+    docker exec -it promoguard-keycloak-postgres psql -U keycloak -d keycloak -c "UPDATE realm SET ssl_required = 'NONE';"
+
+    # 2. Khởi động lại container Keycloak để nhận cấu hình mới
+    docker restart promoguard-keycloak
+    ──────
+  ### PHẦN 4: KIỂM TRA HỆ THỐNG
+
+  1. Xem log của Spring Boot App:
+    docker compose logs -f app
+    (Hãy kiểm tra xem log có báo lỗi kết nối DB, Redis, Kafka hay lỗi Keycloak Issuer URI không. Nếu log hiển thị  Started DemoApplication...
+  là thành công).
+  2. Truy cập các dịch vụ:
+      • Keycloak (Quản lý User & Client): Truy cập  http://56.10.12.163:8082  (Đăng nhập  admin / admin  và kiểm tra xem Realm  PromoGuard
+      đã được import tự động chưa).
+      • Swagger UI (Test API): Truy cập  http://56.10.12.163:8080/swagger-ui/index.html .

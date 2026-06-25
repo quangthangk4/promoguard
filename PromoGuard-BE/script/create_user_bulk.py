@@ -3,7 +3,7 @@ import requests
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-KEYCLOAK_URL = "http://localhost:8082"
+KEYCLOAK_URL = "http://56.10.12.163:8082"
 ADMIN_REALM = "master"
 TARGET_REALM = "PromoGuard"
 
@@ -72,6 +72,8 @@ def create_user(index):
         "enabled": True,
         "emailVerified": True,
         "email": f"{username}@test.com",
+        "firstName": "User",
+        "lastName": f"{index:05d}",
         "credentials": [
             {
                 "type": "password",

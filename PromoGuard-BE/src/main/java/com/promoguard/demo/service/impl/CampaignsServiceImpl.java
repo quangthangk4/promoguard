@@ -1,27 +1,27 @@
 package com.promoguard.demo.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.promoguard.demo.domain.CampaignStatus;
 import com.promoguard.demo.domain.ClaimResult;
+import com.promoguard.demo.dto.event.VoucherClaimedEvent;
 import com.promoguard.demo.dto.request.CreateCampaignRequest;
 import com.promoguard.demo.dto.request.UpdateCampaignRequest;
 import com.promoguard.demo.dto.response.AdminClaimResponse;
 import com.promoguard.demo.dto.response.CampaignResponse;
 import com.promoguard.demo.dto.response.CampaignStatsResponse;
 import com.promoguard.demo.dto.response.ClaimResponse;
+import com.promoguard.demo.dto.response.UserClaimResponse;
 import com.promoguard.demo.exception.ClaimException;
 import com.promoguard.demo.exception.ResourceNotFoundException;
 import com.promoguard.demo.port.CurrentUserPort;
 import com.promoguard.demo.repository.CampaignsRepository;
-import com.promoguard.demo.dto.response.UserClaimResponse;
 import com.promoguard.demo.service.CampaignsService;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -164,7 +164,7 @@ public class CampaignsServiceImpl implements CampaignsService {
 
     // 4. Publish claim event to Kafka
     try {
-      com.promoguard.demo.dto.event.VoucherClaimedEvent event = new com.promoguard.demo.dto.event.VoucherClaimedEvent(campaignId, userId, Instant.now());
+      VoucherClaimedEvent event = new VoucherClaimedEvent(campaignId, userId, Instant.now());
       String payload = objectMapper.writeValueAsString(event);
       kafkaTemplate.send("voucher-claims", campaignId.toString(), payload)
           .get(5, TimeUnit.SECONDS);

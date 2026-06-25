@@ -32,3 +32,6 @@ build/
 
 ### VS Code ###
 .vscode/
+
+# Gatling tokens
+src/test/resources/tokens.csv
