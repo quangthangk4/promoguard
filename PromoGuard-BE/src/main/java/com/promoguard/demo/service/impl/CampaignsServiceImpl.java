@@ -167,7 +167,7 @@ public class CampaignsServiceImpl implements CampaignsService {
       VoucherClaimedEvent event = new VoucherClaimedEvent(campaignId, userId, Instant.now());
       String payload = objectMapper.writeValueAsString(event);
       kafkaTemplate.send("voucher-claims", campaignId.toString(), payload)
-          .whenComplete((result, ex) -> {
+          .whenComplete((res, ex) -> {
             if (ex != null) {
               log.error("Failed to publish claim event to Kafka, reverting Redis state. Error: {}", ex.getMessage());
               revertRedisClaim(campaignId, userId);
