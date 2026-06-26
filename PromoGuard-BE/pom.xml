@@ -32,6 +32,7 @@
 		<db.url>jdbc:postgresql://localhost:5432/promoguard</db.url>
 		<db.user>promoguard</db.user>
 		<db.password>promoguard</db.password>
+		<jooq.codegen.skip>false</jooq.codegen.skip>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -175,6 +176,7 @@
 					</execution>
 				</executions>
 				<configuration>
+					<skip>${jooq.codegen.skip}</skip>
 					<jdbc>
 						<driver>org.postgresql.Driver</driver>
 						<url>${db.url}</url>
