@@ -162,14 +162,19 @@ public class CampaignsServiceImpl implements CampaignsService {
       throw new ClaimException(ClaimResult.SOLD_OUT);
     }
 
-    // 4. Publish claim event to Kafka
+    // 4. Publish claim event to Kafka asynchronously
     try {
       VoucherClaimedEvent event = new VoucherClaimedEvent(campaignId, userId, Instant.now());
       String payload = objectMapper.writeValueAsString(event);
       kafkaTemplate.send("voucher-claims", campaignId.toString(), payload)
-          .get(5, TimeUnit.SECONDS);
+          .whenComplete((result, ex) -> {
+            if (ex != null) {
+              log.error("Failed to publish claim event to Kafka, reverting Redis state. Error: {}", ex.getMessage());
+              revertRedisClaim(campaignId, userId);
+            }
+          });
     } catch (Exception e) {
-      log.error("Failed to publish claim event to Kafka, reverting Redis state. Error: {}", e.getMessage());
+      log.error("Error preparing Kafka payload, reverting Redis state.", e);
       revertRedisClaim(campaignId, userId);
       throw new RuntimeException("Lỗi ghi nhận lượt claim, vui lòng thử lại.", e);
     }
