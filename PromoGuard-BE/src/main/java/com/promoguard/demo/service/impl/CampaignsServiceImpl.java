@@ -92,7 +92,15 @@ public class CampaignsServiceImpl implements CampaignsService {
 
   @Override
   public CampaignResponse createCampaign(CreateCampaignRequest request) {
-    return campaignsRepository.create(request);
+    CampaignResponse response = campaignsRepository.create(request);
+    if (response.status() == CampaignStatus.ACTIVE) {
+      try {
+        warmupCampaignCache(response.id(), response.remainingQuantity());
+      } catch (Exception e) {
+        log.error("Failed to warmup cache on campaign creation", e);
+      }
+    }
+    return response;
   }
 
   @Override
@@ -127,15 +135,7 @@ public class CampaignsServiceImpl implements CampaignsService {
       throw new ClaimException(ClaimResult.CAMPAIGN_NOT_ACTIVE);
     }
 
-    // 2b. Warm up cache if stock key is missing (e.g. Redis restarted or key evicted)
-    try {
-      Boolean hasStock = redisTemplate.hasKey(stockKey);
-      if (hasStock == null || !hasStock) {
-        warmupCampaignCache(campaignId, campaign.remainingQuantity());
-      }
-    } catch (Exception e) {
-      log.error("Error checking Redis stock key existence", e);
-    }
+
 
     // 3. Perform atomic decrement and duplicate claim check in Redis via Lua Script
     UUID userId = currentUserPort.getUserId();
@@ -238,12 +238,15 @@ public class CampaignsServiceImpl implements CampaignsService {
     CampaignResponse response = campaignsRepository.updateStatus(campaignId, status)
         .orElseThrow(() -> new ResourceNotFoundException("Chiến dịch không tồn tại"));
 
-    // Evict cache to ensure status changes are propagated to Redis immediately
+    // Evict cache and warm up if status is active
     try {
       String metadataKey = "campaign:" + campaignId + ":metadata";
       redisTemplate.delete(metadataKey);
+      if (status == CampaignStatus.ACTIVE) {
+        warmupCampaignCache(campaignId, response.remainingQuantity());
+      }
     } catch (Exception e) {
-      log.error("Failed to evict Redis metadata cache on status update", e);
+      log.error("Failed to update Redis cache on status change", e);
     }
 
     return response;
