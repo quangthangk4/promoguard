@@ -38,6 +38,7 @@ public class CampaignsServiceImpl implements CampaignsService {
   private final ObjectMapper objectMapper;
   private final StringRedisTemplate redisTemplate;
   private final KafkaTemplate<String, String> kafkaTemplate;
+  private final java.util.Map<UUID, CampaignResponse> metadataLocalCache = new java.util.concurrent.ConcurrentHashMap<>();
 
   private static final String CLAIM_LUA_SCRIPT =
       "local stock_key = KEYS[1]\n" +
@@ -109,24 +110,27 @@ public class CampaignsServiceImpl implements CampaignsService {
     String stockKey = "campaign:" + campaignId + ":stock";
     String claimedKey = "campaign:" + campaignId + ":claimed_users";
 
-    // 1. Get campaign metadata from Redis, load lazily from DB if missing
-    CampaignResponse campaign;
-    try {
-      String metadataJson = redisTemplate.opsForValue().get(metadataKey);
-      if (metadataJson != null) {
-        campaign = objectMapper.readValue(metadataJson, CampaignResponse.class);
-      } else {
+    // 1. Get campaign metadata from local cache, fallback to Redis/DB if missing
+    CampaignResponse campaign = metadataLocalCache.get(campaignId);
+    if (campaign == null) {
+      try {
+        String metadataJson = redisTemplate.opsForValue().get(metadataKey);
+        if (metadataJson != null) {
+          campaign = objectMapper.readValue(metadataJson, CampaignResponse.class);
+        } else {
+          campaign = campaignsRepository.findById(campaignId)
+              .orElseThrow(() -> new ResourceNotFoundException("Chiến dịch không tồn tại"));
+          redisTemplate.opsForValue().set(metadataKey, objectMapper.writeValueAsString(campaign), 1, TimeUnit.HOURS);
+        }
+        metadataLocalCache.put(campaignId, campaign);
+      } catch (ResourceNotFoundException e) {
+        throw e;
+      } catch (Exception e) {
+        log.error("Error reading campaign metadata", e);
+        // Fallback directly to DB if Redis metadata is erroring
         campaign = campaignsRepository.findById(campaignId)
             .orElseThrow(() -> new ResourceNotFoundException("Chiến dịch không tồn tại"));
-        redisTemplate.opsForValue().set(metadataKey, objectMapper.writeValueAsString(campaign), 1, TimeUnit.HOURS);
       }
-    } catch (ResourceNotFoundException e) {
-      throw e;
-    } catch (Exception e) {
-      log.error("Error reading campaign metadata", e);
-      // Fallback directly to DB if Redis metadata is erroring
-      campaign = campaignsRepository.findById(campaignId)
-          .orElseThrow(() -> new ResourceNotFoundException("Chiến dịch không tồn tại"));
     }
 
     // 2. Validate campaign active status and time window
@@ -242,6 +246,7 @@ public class CampaignsServiceImpl implements CampaignsService {
     try {
       String metadataKey = "campaign:" + campaignId + ":metadata";
       redisTemplate.delete(metadataKey);
+      metadataLocalCache.remove(campaignId);
       if (status == CampaignStatus.ACTIVE) {
         warmupCampaignCache(campaignId, response.remainingQuantity());
       }
@@ -285,6 +290,7 @@ public class CampaignsServiceImpl implements CampaignsService {
       String metadataKey = "campaign:" + campaignId + ":metadata";
       String stockKey = "campaign:" + campaignId + ":stock";
       redisTemplate.delete(List.of(metadataKey, stockKey));
+      metadataLocalCache.remove(campaignId);
     } catch (Exception e) {
       log.error("Failed to evict Redis cache on campaign update", e);
     }
