@@ -10,7 +10,7 @@ import java.time.Duration;
 public class VoucherClaimSimulation extends Simulation {
 
   private final String targetUrl = System.getProperty("target.url", "http://56.10.12.163:8080");
-  private final String campaignId = System.getProperty("campaign.id", "441ca776-2953-4e6e-b5f5-53544c3fdaa1");
+  private final String campaignId = System.getProperty("campaign.id", "80cef24b-80dd-4183-84ef-3b4de7c0c530");
 
   // Đọc cấu hình động truyền vào từ lệnh Maven
   // Mặc định: 100 users, tăng tải trong 10 giây

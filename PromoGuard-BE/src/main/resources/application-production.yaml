@@ -45,3 +45,8 @@ springdoc:
     oauth:
       client-id: promoguard-web
       use-pkce-with-authorization-code-grant: true
+
+server:
+  tomcat:
+    max-connections: 10000
+    accept-count: 2000
