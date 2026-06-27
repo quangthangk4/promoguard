@@ -118,7 +118,24 @@ class CampaignControllerIntegrationTest {
         .andExpect(jsonPath("$.success").value(true))
         .andExpect(jsonPath("$.data.result").value("SUCCESS"));
 
-    // 5. Get stats
+    // 5. Get stats (Wait up to 5 seconds for async Kafka consumer to process both claims in database)
+    boolean processed = false;
+    for (int i = 0; i < 50; i++) {
+      MvcResult statsResult = mockMvc.perform(get("/api/v1/campaigns/" + campaignId + "/stats")
+              .with(jwt().jwt(builder -> builder.subject(userId.toString()).claim("preferred_username", "testuser"))))
+          .andExpect(status().isOk())
+          .andReturn();
+      String statsJson = statsResult.getResponse().getContentAsString();
+      int remainingQuantity = objectMapper.readTree(statsJson).get("data").get("remainingQuantity").asInt();
+      if (remainingQuantity == 3) {
+        processed = true;
+        break;
+      }
+      Thread.sleep(100);
+    }
+    
+    org.junit.jupiter.api.Assertions.assertTrue(processed, "Voucher claims should be asynchronously updated in database");
+
     mockMvc.perform(get("/api/v1/campaigns/" + campaignId + "/stats")
             .with(jwt().jwt(builder -> builder.subject(userId.toString()).claim("preferred_username", "testuser"))))
         .andExpect(status().isOk())
