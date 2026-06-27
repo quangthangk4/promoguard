@@ -10,6 +10,7 @@ services:
       - "8080:8080"
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-production}
+      JAVA_TOOL_OPTIONS: "-Djdk.tracePinnedThreads=short"
 
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/promoguard
       SPRING_DATASOURCE_USERNAME: promoguard
