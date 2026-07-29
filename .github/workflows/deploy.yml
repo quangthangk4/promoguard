@@ -65,6 +65,17 @@ jobs:
           push: true
           tags: ghcr.io/${{ steps.repo_owner.outputs.owner }}/promoguard-be:latest
 
+      - name: Build & Push Frontend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./PromoGuard-FE
+          file: ./PromoGuard-FE/Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.repo_owner.outputs.owner }}/promoguard-fe:latest
+          build-args: |
+            VITE_API_URL=http://${{ secrets.VPS_HOST }}:8080
+            VITE_KEYCLOAK_URL=http://${{ secrets.VPS_HOST }}:8082
+
   deploy-to-vps:
     needs: build-and-push
     runs-on: ubuntu-latest
@@ -88,10 +99,10 @@ jobs:
             # Đăng nhập GHCR trên VPS để pull image
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Pull image mới nhất của dịch vụ 'app'
-            docker compose --profile full pull app
+            # Pull image mới nhất của dịch vụ 'app' và 'frontend'
+            docker compose --profile full pull app frontend
             
-            # Khởi động toàn bộ hạ tầng (Postgres, Redis, Kafka, Keycloak...) và App
+            # Khởi động toàn bộ hạ tầng (Postgres, Redis, Kafka, Keycloak...) và App, Frontend
             docker compose --profile full up -d
             
             # Xóa các image cũ để giải phóng dung lượng VPS
