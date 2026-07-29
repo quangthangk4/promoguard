@@ -79,6 +79,9 @@ jobs:
           script: |
             cd ~/promoguard
             
+            # Tự động cập nhật IP VPS vào file .env
+            echo "VPS_IP=${{ secrets.VPS_HOST }}" > .env
+            
             # Cập nhật code và file docker-compose.yml mới nhất từ GitHub
             git pull origin main
             
