@@ -1,5 +1,6 @@
 services:
   app:
+    image: ghcr.io/quangthangk4/promoguard-be:latest
     build:
       context: ./PromoGuard-BE
       dockerfile: Dockerfile

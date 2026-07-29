@@ -1,0 +1,73 @@
+name: PromoGuard CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build Backend với Maven
+        run: |
+          cd PromoGuard-BE
+          ./mvnw clean package -DskipTests
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Lowercase Repository Owner for Docker Tag
+        id: repo_owner
+        run: echo "owner=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Build & Push Backend Image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./PromoGuard-BE
+          file: ./PromoGuard-BE/Dockerfile
+          push: true
+          tags: ghcr.io/${{ steps.repo_owner.outputs.owner }}/promoguard-be:latest
+
+  deploy-to-vps:
+    needs: build-and-push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy qua SSH vào VPS AWS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            cd /home/ubuntu/PromoGuard
+            
+            # Đăng nhập GHCR trên VPS để pull image
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Pull image mới nhất của dịch vụ 'app'
+            docker compose --profile full pull app
+            
+            # Khởi động lại container 'app' mà không ảnh hưởng đến các DB/Broker khác
+            docker compose --profile full up -d --no-deps app
+            
+            # Xóa các image cũ để giải phóng dung lượng VPS
+            docker image prune -f
