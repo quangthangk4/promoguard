@@ -79,14 +79,17 @@ jobs:
           script: |
             cd ~/promoguard
             
+            # Cập nhật code và file docker-compose.yml mới nhất từ GitHub
+            git pull origin main
+            
             # Đăng nhập GHCR trên VPS để pull image
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
             # Pull image mới nhất của dịch vụ 'app'
             docker compose --profile full pull app
             
-            # Khởi động lại container 'app' mà không ảnh hưởng đến các DB/Broker khác
-            docker compose --profile full up -d --no-deps app
+            # Khởi động toàn bộ hạ tầng (Postgres, Redis, Kafka, Keycloak...) và App
+            docker compose --profile full up -d
             
             # Xóa các image cũ để giải phóng dung lượng VPS
             docker image prune -f
