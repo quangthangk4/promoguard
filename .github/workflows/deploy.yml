@@ -93,7 +93,8 @@ jobs:
             # Tự động cập nhật IP VPS vào file .env
             echo "VPS_IP=${{ secrets.VPS_HOST }}" > .env
             
-            # Cập nhật code và file docker-compose.yml mới nhất từ GitHub
+            # Reset các thay đổi cục bộ (nếu có) và pull code mới nhất
+            git checkout .
             git pull origin main
             
             # Đăng nhập GHCR trên VPS để pull image
