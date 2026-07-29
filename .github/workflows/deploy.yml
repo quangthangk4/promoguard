@@ -100,8 +100,8 @@ jobs:
             # Đăng nhập GHCR trên VPS để pull image
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             
-            # Pull image mới nhất của dịch vụ 'app' và 'frontend'
-            docker compose --profile full pull app frontend
+            # Pull image mới nhất của dịch vụ 'app' và 'nginx'
+            docker compose --profile full pull app nginx
             
             # Khởi động toàn bộ hạ tầng (Postgres, Redis, Kafka, Keycloak...) và App, Frontend
             docker compose --profile full up -d
