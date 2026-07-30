@@ -9,9 +9,10 @@ const keycloak = new Keycloak({
 let initPromise: Promise<boolean> | null = null
 
 export function initKeycloak() {
+  const supportsWebCrypto = typeof window !== 'undefined' && Boolean(window.crypto?.subtle)
+
   initPromise ??= keycloak.init({
-    onLoad: 'check-sso',
-    pkceMethod: 'S256',
+    pkceMethod: supportsWebCrypto ? 'S256' : false,
     checkLoginIframe: false,
   })
 
