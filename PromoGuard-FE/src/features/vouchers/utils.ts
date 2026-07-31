@@ -28,15 +28,15 @@ export function remainingPercent(voucher: Voucher) {
 export function statusBadgeClass(status: Voucher['status']) {
   switch (status) {
     case 'Active':
-      return 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30'
+      return 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
     case 'Draft':
-      return 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
+      return 'bg-amber-500/15 text-amber-400 border-amber-500/30'
     case 'Ended':
-      return 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30'
+      return 'bg-rose-500/15 text-rose-400 border-rose-500/30'
     case 'Sold out':
-      return 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30'
+      return 'bg-purple-500/15 text-purple-400 border-purple-500/30'
     default:
-      return 'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30'
+      return 'bg-slate-500/15 text-slate-400 border-slate-500/30'
   }
 }
 
@@ -52,11 +52,15 @@ export function rawStatusBadgeClass(status: CampaignStatus) {
 }
 
 export function mapCampaignToVoucher(campaign: CampaignResponse): Voucher {
+  const now = new Date()
+  const start = campaign.startTime ? new Date(campaign.startTime) : null
+  const end = campaign.endTime ? new Date(campaign.endTime) : null
+
   let status: Voucher['status'] = 'Active'
 
-  if (campaign.status === 'DRAFT') {
+  if (campaign.status === 'DRAFT' || (start && now < start)) {
     status = 'Draft'
-  } else if (campaign.status === 'ENDED') {
+  } else if (campaign.status === 'ENDED' || (end && now > end)) {
     status = 'Ended'
   } else if (campaign.remainingQuantity <= 0) {
     status = 'Sold out'

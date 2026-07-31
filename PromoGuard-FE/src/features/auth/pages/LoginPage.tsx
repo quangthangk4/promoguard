@@ -20,22 +20,27 @@ export function LoginPage() {
 
   return (
     <AuthLayout
-      eyebrow="Welcome back"
-      title="Đăng nhập"
+      eyebrow="Welcome Back"
+      title="Đăng Nhập Tài Khoản"
       helper="Truy cập tài khoản để lưu voucher, theo dõi ưu đãi và claim nhanh hơn."
     >
-      <button className="btn btn-primary h-12 text-base" type="button" onClick={() => void login()}>
-        <LogIn size={18} />
-        Tiếp tục đăng nhập
+      <button
+        className="flex w-full items-center justify-center gap-2 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3.5 text-base shadow-lg shadow-indigo-600/30 transition cursor-pointer"
+        type="button"
+        onClick={() => void login()}
+      >
+        <LogIn size={20} />
+        Tiếp tục đăng nhập qua Keycloak
       </button>
-      <p className="rounded-2xl bg-base-200 p-4 text-sm leading-relaxed text-base-content/65">
-        Bạn sẽ được chuyển sang trang đăng nhập bảo mật của PromoGuard. Sau khi đăng nhập thành công,
-        hệ thống tự quay lại ứng dụng.
-      </p>
-      <p className="text-center text-sm text-base-content/60">
+
+      <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-4 text-xs leading-relaxed text-slate-300">
+        Bạn sẽ được chuyển sang trang đăng nhập bảo mật của PromoGuard. Sau khi đăng nhập thành công, hệ thống sẽ tự quay lại ứng dụng.
+      </div>
+
+      <p className="text-center text-xs text-slate-400 mt-2">
         Chưa có tài khoản?{' '}
         <button
-          className="link link-primary font-bold no-underline"
+          className="font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
           type="button"
           onClick={() => void register()}
         >
