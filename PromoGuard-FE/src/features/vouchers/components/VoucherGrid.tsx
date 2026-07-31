@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { ShoppingBag, Loader2 } from 'lucide-react'
+import { Ticket, Sparkles, AlertCircle, CheckCircle2, Clock, Calendar, Info, Loader2, Lock } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import type { Role } from '../../auth'
-import type { CampaignResponse, Voucher } from '../types'
-import { voucherAccentClass, formatNumber } from '../utils'
+import type { CampaignResponse, ClaimResponse, Voucher } from '../types'
+import { statusBadgeClass, formatDate, formatNumber } from '../utils'
 import { VoucherProgress } from './VoucherProgress'
 import api from '../../../shared/lib/api'
 
@@ -35,12 +35,11 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
     setClaiming(true)
     setMessage(null)
     try {
-      const response = await api.post<{ success: boolean; message: string }>(
-        `/api/v1/campaigns/${voucher.id}/claim`,
-      )
+      const response = await api.post<ClaimResponse>(`/api/v1/campaigns/${voucher.id}/claim`)
       const apiResp = response.data
-      if (apiResp.success) {
-        setMessage({ type: 'success', text: apiResp.message || 'Claim voucher thành công!' })
+
+      if (apiResp.result === 'SUCCESS') {
+        setMessage({ type: 'success', text: apiResp.message || 'Săn voucher thành công!' })
         setLocalRemaining((prev) => Math.max(0, prev - 1))
         if (onClaimed) onClaimed()
       } else {
@@ -56,195 +55,186 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
   }
 
   const displayRemaining = Math.min(localRemaining, voucher.remaining)
+  const isSoldOut = displayRemaining <= 0 || voucher.status === 'Sold out' || voucher.status === 'Ended'
+  const isDraft = voucher.status === 'Draft'
+  const canClaim = !isSoldOut && !isDraft && role !== 'guest'
 
-  const updatedVoucher = {
+  const currentVoucher: Voucher = {
     ...voucher,
     remaining: displayRemaining,
   }
 
-  const isSoldOut = displayRemaining <= 0 || voucher.status === 'Sold out'
-  const isScheduled = voucher.status === 'Scheduled'
-  const canClaim = !isSoldOut && !isScheduled && role !== 'guest'
-
   return (
     <>
-      <article className="voucher-ticket group relative overflow-hidden rounded-3xl border border-white/70 bg-white shadow-xl shadow-slate-900/10 transition duration-300 hover:-translate-y-1 hover:shadow-2xl hover:shadow-slate-900/15">
-        <div className={`relative p-5 text-white ${voucherAccentClass(voucher.category)}`}>
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,255,255,0.34),transparent_28%),linear-gradient(120deg,rgba(255,255,255,0.18),transparent_48%)]" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-black uppercase tracking-wide text-white/70">
-                {voucher.merchant}
-              </p>
-              <div className="mt-3 text-4xl font-black leading-none tracking-tight">
-                {voucher.value}
-              </div>
-            </div>
-            <span className="rounded-full bg-white/18 px-3 py-1 text-xs font-black uppercase backdrop-blur">
-              {isSoldOut ? 'Sold out' : voucher.status}
+      <article className="glass-panel glass-panel-hover relative flex flex-col justify-between overflow-hidden rounded-3xl p-6 transition-all">
+        {/* Header Badge & Title */}
+        <div>
+          <div className="flex items-start justify-between gap-3 mb-4">
+            <span className="flex items-center gap-1.5 rounded-xl bg-indigo-500/10 px-3 py-1 text-xs font-bold text-indigo-400 border border-indigo-500/20">
+              <Ticket size={14} />
+              {voucher.merchant}
             </span>
+            <span className={`rounded-xl px-3 py-1 text-xs font-bold border backdrop-blur-md ${statusBadgeClass(voucher.status)}`}>
+              {voucher.status}
+            </span>
+          </div>
+
+          <h3
+            className="text-xl font-black text-white hover:text-indigo-400 cursor-pointer transition-colors line-clamp-2 leading-snug mb-3"
+            onClick={handleOpenDetail}
+            title="Click để xem chi tiết"
+          >
+            {voucher.title}
+          </h3>
+
+          <div className="flex items-center gap-4 text-xs text-slate-400 mb-5">
+            <span className="flex items-center gap-1">
+              <Calendar size={14} className="text-slate-500" />
+              BD: {formatDate(voucher.startTime)}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock size={14} className="text-slate-500" />
+              KT: {formatDate(voucher.endTime)}
+            </span>
+          </div>
+
+          {/* Progress Bar */}
+          <div className="mb-6 bg-slate-900/60 p-3.5 rounded-2xl border border-slate-800">
+            <VoucherProgress voucher={currentVoucher} />
           </div>
         </div>
 
-        <div className="relative grid gap-4 p-5">
-          <div>
-            <div className="flex items-center justify-between gap-3">
-              <h3
-                className="text-xl font-black leading-tight cursor-pointer hover:text-primary transition"
-                onClick={handleOpenDetail}
-                title="Click để xem chi tiết"
-              >
-                {voucher.title}
-              </h3>
-              <span className="badge badge-ghost shrink-0 font-bold">{voucher.category}</span>
-            </div>
-            <p className="mt-1 text-sm text-base-content/55">
-              Public campaign • one claim per account
-            </p>
-          </div>
-
-          <VoucherProgress voucher={updatedVoucher} />
-
+        {/* Claim Action & Feedback */}
+        <div className="mt-2 flex flex-col gap-3">
           {message && (
             <div
-              className={`text-xs font-bold rounded-lg p-2 ${message.type === 'success' ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}`}
+              className={`flex items-center gap-2 rounded-xl p-3 text-xs font-semibold animate-in fade-in slide-in-from-top-1 ${
+                message.type === 'success'
+                  ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                  : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+              }`}
             >
-              {message.text}
+              {message.type === 'success' ? (
+                <CheckCircle2 size={16} className="shrink-0 text-emerald-400" />
+              ) : (
+                <AlertCircle size={16} className="shrink-0 text-rose-400" />
+              )}
+              <span>{message.text}</span>
             </div>
           )}
 
-          <div className="voucher-cut relative my-1 border-t border-dashed border-base-300" />
-
-          <div className="grid grid-cols-[1fr_auto] items-center gap-4">
-            <div>
-              <p className="text-xs font-black uppercase text-base-content/45">Valid until</p>
-              <span className="font-black text-base-content/75">{voucher.endsAt}</span>
-            </div>
-            {role === 'guest' ? (
-              <Link className="btn btn-primary min-w-24 rounded-full" to="/login">
-                <ShoppingBag size={17} />
-                Đăng nhập
-              </Link>
-            ) : (
-              <button
-                className={`btn btn-primary min-w-24 rounded-full ${claiming ? 'btn-disabled' : ''} ${!canClaim ? 'btn-disabled' : ''}`}
-                type="button"
-                disabled={claiming || !canClaim}
-                onClick={handleClaim}
-              >
-                {claiming ? <Loader2 className="animate-spin" size={17} /> : <ShoppingBag size={17} />}
-                Claim
-              </button>
-            )}
-          </div>
+          {role === 'guest' ? (
+            <Link
+              to="/login"
+              className="flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 py-3 text-sm font-bold text-indigo-300 hover:bg-indigo-500/20 transition"
+            >
+              <Lock size={16} />
+              Đăng nhập để nhận voucher
+            </Link>
+          ) : (
+            <button
+              type="button"
+              disabled={!canClaim || claiming}
+              onClick={handleClaim}
+              className={`flex w-full items-center justify-center gap-2 rounded-2xl py-3 text-sm font-bold shadow-lg transition-all cursor-pointer ${
+                canClaim
+                  ? 'bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white shadow-emerald-600/25 active:scale-[0.98]'
+                  : 'bg-slate-800 text-slate-500 border border-slate-700/50 cursor-not-allowed'
+              }`}
+            >
+              {claiming ? (
+                <>
+                  <Loader2 size={18} className="animate-spin" />
+                  Đang gửi request...
+                </>
+              ) : isSoldOut ? (
+                'Đã hết lượt (Sold out)'
+              ) : isDraft ? (
+                'Chưa bắt đầu (Draft)'
+              ) : (
+                <>
+                  <Sparkles size={18} />
+                  Săn Voucher Ngay
+                </>
+              )}
+            </button>
+          )}
         </div>
       </article>
 
+      {/* Campaign Detail Modal */}
       {showDetailModal && (
-        <div className="modal modal-open z-50">
-          <div className="modal-box max-w-lg bg-base-100 rounded-3xl p-6 relative">
-            <button
-              className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
-              type="button"
-              onClick={() => setShowDetailModal(false)}
-            >
-              ✕
-            </button>
-            <h3 className="font-black text-2xl text-base-content mb-4">Chi tiết Voucher</h3>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h4 className="text-lg font-bold text-white flex items-center gap-2">
+                <Info className="text-indigo-400" size={20} />
+                Chi tiết Chiến dịch
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowDetailModal(false)}
+                className="text-slate-400 hover:text-white text-sm font-bold rounded-lg p-1 hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
 
             {detailLoading ? (
-              <div className="grid h-40 place-items-center">
-                <Loader2 className="animate-spin text-primary" size={28} />
+              <div className="grid h-48 place-items-center">
+                <Loader2 className="animate-spin text-indigo-400" size={32} />
               </div>
             ) : detailData ? (
-              <div className="grid gap-4">
-                <div className="rounded-2xl bg-base-200 p-4">
-                  <span className="text-xs font-black uppercase text-base-content/45">Tên chiến dịch</span>
-                  <p className="font-bold text-lg text-primary">{detailData.name}</p>
+              <div className="mt-4 flex flex-col gap-4 text-sm">
+                <div className="bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+                  <span className="text-xs text-slate-400 font-semibold block mb-1">Tên chiến dịch</span>
+                  <p className="text-base font-bold text-white">{detailData.name}</p>
                 </div>
 
                 <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs font-black uppercase text-base-content/45">Mã ID</span>
-                    <p className="font-mono text-[10px] truncate select-all bg-base-200 p-2 rounded-lg mt-1" title={detailData.id}>
-                      {detailData.id}
-                    </p>
+                  <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
+                    <span className="text-xs text-slate-400 font-semibold block mb-1">Tổng số lượng</span>
+                    <p className="text-lg font-black text-indigo-400">{formatNumber(detailData.totalQuantity)}</p>
                   </div>
-                  <div>
-                    <span className="text-xs font-black uppercase text-base-content/45">Trạng thái</span>
-                    <div className="mt-1">
-                      <span className={`badge font-bold ${
-                        detailData.status === 'ACTIVE' ? 'badge-success text-success-content' : 
-                        detailData.status === 'DRAFT' ? 'badge-info' : 'badge-ghost'
-                      }`}>
-                        {detailData.status}
-                      </span>
-                    </div>
+
+                  <div className="bg-slate-900/80 p-3.5 rounded-2xl border border-slate-800">
+                    <span className="text-xs text-slate-400 font-semibold block mb-1">Số lượng còn lại</span>
+                    <p className="text-lg font-black text-emerald-400">{formatNumber(detailData.remainingQuantity)}</p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs font-black uppercase text-base-content/45">Thời gian bắt đầu</span>
-                    <p className="text-sm font-bold text-base-content/75">
-                      {new Date(detailData.startTime).toLocaleString('vi-VN')}
-                    </p>
+                <div className="space-y-2 text-xs text-slate-300 bg-slate-900/40 p-4 rounded-2xl border border-slate-800">
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Trạng thái:</span>
+                    <span className="font-bold text-amber-400">{detailData.status}</span>
                   </div>
-                  <div>
-                    <span className="text-xs font-black uppercase text-base-content/45">Thời gian kết thúc</span>
-                    <p className="text-sm font-bold text-base-content/75">
-                      {new Date(detailData.endTime).toLocaleString('vi-VN')}
-                    </p>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Thời gian bắt đầu:</span>
+                    <span className="font-mono text-slate-200">{formatDate(detailData.startTime)}</span>
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <span className="text-xs font-black uppercase text-base-content/45">Tổng phát hành</span>
-                    <p className="text-base font-bold text-base-content/80">
-                      {formatNumber(detailData.totalQuantity)} voucher
-                    </p>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">Thời gian kết thúc:</span>
+                    <span className="font-mono text-slate-200">{formatDate(detailData.endTime)}</span>
                   </div>
-                  <div>
-                    <span className="text-xs font-black uppercase text-base-content/45">Còn lại</span>
-                    <p className="text-base font-bold text-success">
-                      {formatNumber(detailData.remainingQuantity)} voucher
-                    </p>
+                  <div className="flex justify-between">
+                    <span className="text-slate-400">ID Chiến dịch:</span>
+                    <span className="font-mono text-slate-400 text-[10px]">{detailData.id}</span>
                   </div>
-                </div>
-
-                <div className="mt-2">
-                  <span className="text-xs font-black uppercase text-base-content/45 block mb-1">Tỷ lệ còn lại</span>
-                  <progress
-                    className="progress progress-primary w-full h-3"
-                    max={detailData.totalQuantity}
-                    value={detailData.remainingQuantity}
-                  />
-                </div>
-
-                <div className="modal-action mt-4">
-                  {role === 'guest' ? (
-                    <Link className="btn btn-primary w-full rounded-full" to="/login">
-                      Đăng nhập để claim
-                    </Link>
-                  ) : (
-                    <button
-                      className={`btn btn-primary w-full rounded-full ${claiming ? 'btn-disabled' : ''} ${!canClaim ? 'btn-disabled' : ''}`}
-                      disabled={claiming || !canClaim}
-                      type="button"
-                      onClick={() => {
-                        setShowDetailModal(false)
-                        void handleClaim()
-                      }}
-                    >
-                      {claiming ? <Loader2 className="animate-spin" size={17} /> : 'Claim ngay'}
-                    </button>
-                  )}
                 </div>
               </div>
             ) : (
-              <p className="text-error text-center py-4">Không thể tải thông tin chi tiết.</p>
+              <p className="py-6 text-center text-slate-400">Không thể tải thông tin chiến dịch.</p>
             )}
+
+            <div className="mt-6 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setShowDetailModal(false)}
+                className="rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-700 transition"
+              >
+                Đóng
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -253,16 +243,28 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
 }
 
 export function VoucherGrid({
-  role,
   vouchers,
+  role,
   onClaimed,
 }: {
-  role: Role
   vouchers: Voucher[]
+  role: Role
   onClaimed?: () => void
 }) {
+  if (vouchers.length === 0) {
+    return (
+      <div className="glass-panel flex flex-col items-center justify-center rounded-3xl p-12 text-center">
+        <Ticket className="mb-3 text-slate-600" size={48} />
+        <h4 className="text-lg font-bold text-white">Không tìm thấy voucher phù hợp</h4>
+        <p className="text-sm text-slate-400 mt-1 max-w-md">
+          Hiện tại không có chiến dịch voucher nào khả dụng hoặc không khớp với từ khóa tìm kiếm của bạn.
+        </p>
+      </div>
+    )
+  }
+
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
       {vouchers.map((voucher) => (
         <VoucherCard key={voucher.id} voucher={voucher} role={role} onClaimed={onClaimed} />
       ))}

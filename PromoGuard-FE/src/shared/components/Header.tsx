@@ -3,13 +3,14 @@ import { Link, NavLink } from 'react-router-dom'
 import { type Role, useAuth } from '../../features/auth'
 
 function roleBadgeClass(role: Role) {
-  const classes = {
-    admin: 'badge badge-warning p-3 font-black uppercase',
-    guest: 'badge badge-info p-3 font-black uppercase',
-    user: 'badge badge-success p-3 font-black uppercase text-success-content',
+  switch (role) {
+    case 'admin':
+      return 'bg-amber-500/20 text-amber-300 border border-amber-500/40 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider'
+    case 'user':
+      return 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider'
+    default:
+      return 'bg-slate-700/50 text-slate-300 border border-slate-600 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider'
   }
-
-  return classes[role]
 }
 
 export function Header({
@@ -22,123 +23,149 @@ export function Header({
   setMenuOpen: (value: boolean) => void
 }) {
   const { logout } = useAuth()
+
   const navItems = [
     { to: '/', label: 'Trang chủ' },
-    { to: '/vouchers', label: 'Voucher' },
+    { to: '/vouchers', label: 'Voucher Catalog' },
     ...(role !== 'guest' ? [{ to: '/user/vouchers', label: 'Voucher của tôi' }] : []),
     ...(role !== 'guest' ? [{ to: '/profile', label: 'Hồ sơ' }] : []),
-    ...(role === 'admin' ? [{ to: '/admin', label: 'Admin' }] : []),
+    ...(role === 'admin' ? [{ to: '/admin', label: 'Quản trị' }] : []),
   ]
 
   return (
-    <header className="sticky top-0 z-30 border-b border-white/60 bg-white/80 shadow-sm backdrop-blur-xl">
-      <div className="navbar mx-auto min-h-18 w-[min(1180px,calc(100%-1.5rem))] px-0 sm:w-[min(1180px,calc(100%-2.25rem))]">
-        <div className="navbar-start">
-          <Link className="flex items-center gap-3 text-base-content no-underline" to="/">
-            <span className="grid size-11 place-items-center rounded-lg bg-primary text-primary-content">
-              <ShieldCheck size={22} />
+    <header className="sticky top-0 z-50 border-b border-slate-800 bg-slate-900/80 backdrop-blur-xl transition-all">
+      <div className="mx-auto flex h-20 w-[min(1280px,calc(100%-2rem))] items-center justify-between">
+        {/* Brand Logo */}
+        <Link className="flex items-center gap-3 no-underline group" to="/">
+          <div className="flex size-11 items-center justify-center rounded-xl bg-gradient-to-tr from-indigo-600 to-emerald-500 text-white shadow-lg shadow-indigo-500/30 group-hover:scale-105 transition-transform">
+            <ShieldCheck size={24} />
+          </div>
+          <div>
+            <strong className="block text-xl font-black tracking-tight text-white group-hover:text-indigo-400 transition-colors">
+              PromoGuard
+            </strong>
+            <span className="block text-xs font-medium text-slate-400">
+              High-Throughput Voucher Engine
             </span>
-            <span>
-              <strong className="block text-lg leading-tight">PromoGuard</strong>
-              <small className="block text-xs text-base-content/60">
-                Flash sale reservation
-              </small>
-            </span>
-          </Link>
-        </div>
+          </div>
+        </Link>
 
-        <div className="navbar-center hidden lg:flex">
-          <nav className="menu menu-horizontal gap-1 px-1">
-            {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  className={({ isActive }) =>
-                    `rounded-lg font-bold ${isActive ? 'bg-base-200 text-base-content' : ''}`
-                  }
-                  to={item.to}
-                >
-                  {item.label}
-                </NavLink>
-              </li>
-            ))}
-          </nav>
-        </div>
+        {/* Desktop Navigation */}
+        <nav className="hidden lg:flex items-center gap-1 bg-slate-800/40 p-1.5 rounded-2xl border border-slate-700/50">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                `px-4 py-2 text-sm font-semibold rounded-xl transition-all ${
+                  isActive
+                    ? 'bg-gradient-to-r from-indigo-600 to-indigo-500 text-white shadow-md shadow-indigo-500/20'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
+                }`
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
 
-        <div className="navbar-end gap-2">
+        {/* Right Actions & Auth */}
+        <div className="flex items-center gap-3">
           {role !== 'guest' && <span className={roleBadgeClass(role)}>{role}</span>}
-          <div className="hidden gap-2 sm:flex">
+
+          <div className="hidden sm:flex items-center gap-2">
             {role === 'guest' ? (
               <>
-                <Link className="btn btn-ghost btn-sm" to="/login">
-                  <LogIn size={17} />
+                <Link
+                  className="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-bold text-slate-300 hover:bg-slate-800 hover:text-white transition"
+                  to="/login"
+                >
+                  <LogIn size={18} />
                   Đăng nhập
                 </Link>
-                <Link className="btn btn-primary btn-sm" to="/register">
-                  <UserPlus size={17} />
+                <Link
+                  className="flex items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 text-sm font-bold shadow-lg shadow-indigo-600/30 transition hover:shadow-indigo-500/40"
+                  to="/register"
+                >
+                  <UserPlus size={18} />
                   Đăng ký
                 </Link>
               </>
             ) : (
               <button
-                className="btn btn-ghost btn-sm"
+                className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 px-4 py-2 text-sm font-bold transition cursor-pointer"
                 type="button"
                 onClick={() => void logout()}
               >
-                <LogOut size={17} />
+                <LogOut size={18} />
                 Đăng xuất
               </button>
             )}
           </div>
+
+          {/* Mobile menu toggle */}
           <button
-            className="btn btn-square btn-ghost lg:hidden"
+            className="flex size-10 items-center justify-center rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 lg:hidden hover:bg-slate-800 hover:text-white"
             type="button"
             aria-label="Toggle navigation"
             onClick={() => setMenuOpen(!menuOpen)}
           >
-            {menuOpen ? <X size={21} /> : <Menu size={21} />}
+            {menuOpen ? <X size={22} /> : <Menu size={22} />}
           </button>
         </div>
       </div>
 
+      {/* Mobile Drawer */}
       {menuOpen && (
-        <div className="border-t border-base-300 bg-base-100 p-3 lg:hidden">
-          <nav className="menu gap-1">
+        <div className="border-b border-slate-800 bg-slate-900/95 p-4 lg:hidden backdrop-blur-2xl">
+          <nav className="flex flex-col gap-2">
             {navItems.map((item) => (
-              <li key={item.to}>
-                <NavLink
-                  className={({ isActive }) =>
-                    `rounded-lg font-bold ${isActive ? 'active' : ''}`
-                  }
-                  onClick={() => setMenuOpen(false)}
-                  to={item.to}
-                >
-                  {item.label}
-                </NavLink>
-              </li>
+              <NavLink
+                key={item.to}
+                to={item.to}
+                onClick={() => setMenuOpen(false)}
+                className={({ isActive }) =>
+                  `px-4 py-3 text-sm font-bold rounded-xl transition-all ${
+                    isActive
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-300 hover:bg-slate-800 hover:text-white'
+                  }`
+                }
+              >
+                {item.label}
+              </NavLink>
             ))}
           </nav>
-          <div className="mt-3 grid gap-2 sm:hidden">
+          <div className="mt-4 pt-4 border-t border-slate-800 flex flex-col gap-2">
             {role === 'guest' ? (
               <>
-                <Link className="btn btn-outline btn-sm" to="/login">
-                  <LogIn size={17} />
+                <Link
+                  className="flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-800 py-2.5 font-bold text-white"
+                  to="/login"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <LogIn size={18} />
                   Đăng nhập
                 </Link>
-                <Link className="btn btn-primary btn-sm" to="/register">
-                  <UserPlus size={17} />
+                <Link
+                  className="flex items-center justify-center gap-2 rounded-xl bg-indigo-600 py-2.5 font-bold text-white"
+                  to="/register"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  <UserPlus size={18} />
                   Đăng ký
                 </Link>
               </>
             ) : (
               <button
-                className="btn btn-outline btn-sm"
+                className="flex items-center justify-center gap-2 rounded-xl bg-rose-600/20 text-rose-300 border border-rose-500/30 py-2.5 font-bold"
                 type="button"
                 onClick={() => {
                   setMenuOpen(false)
                   void logout()
                 }}
               >
-                <LogOut size={17} />
+                <LogOut size={18} />
                 Đăng xuất
               </button>
             )}

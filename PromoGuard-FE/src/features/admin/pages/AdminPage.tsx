@@ -1,163 +1,130 @@
 import { useEffect, useState } from 'react'
 import {
   ShieldCheck,
-  Trash2,
-  Play,
-  Square,
   PlusCircle,
+  Trash2,
+  Edit3,
+  ToggleRight,
+  Eye,
+  BarChart3,
+  Users,
   Loader2,
+  CheckCircle2,
+  RefreshCw,
 } from 'lucide-react'
 import type { Role } from '../../auth'
-import type { CampaignResponse, Voucher } from '../../vouchers/types'
-import { mapCampaignToVoucher, formatNumber, remainingPercent, statusDotClass } from '../../vouchers/utils'
+import type { CampaignResponse, AdminClaimResponse, CampaignStatsResponse, CampaignStatus } from '../../vouchers/types'
+import { rawStatusBadgeClass, formatDate, formatNumber } from '../../vouchers/utils'
 import { AuthRequired } from '../../../shared/components/AuthRequired'
-import { SectionHead } from '../../../shared/components/SectionHead'
-import type { EventItem } from '../types'
-import { eventDotClass } from '../utils'
 import api from '../../../shared/lib/api'
 
-const mapOutboxToEvent = (msg: any): EventItem => {
-  const date = new Date(msg.createdAt)
-  const time = date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
-  
-  let payloadStr = msg.payload
-  try {
-    const obj = JSON.parse(msg.payload)
-    payloadStr = JSON.stringify(obj)
-  } catch (e) {
-    // Raw
-  }
-
-  return {
-    time,
-    title: `${msg.eventType}`,
-    detail: `Type: ${msg.aggregateType} [${msg.aggregateId}] • ${payloadStr}`,
-    status: msg.status === 'PROCESSED' ? 'success' : 'pending',
-  }
-}
-
 export function AdminPage({ role }: { role: Role }) {
-  const [campaigns, setCampaigns] = useState<Voucher[]>([])
-  const [eventsList, setEventsList] = useState<EventItem[]>([])
+  const [campaigns, setCampaigns] = useState<CampaignResponse[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorMsg, setErrorMsg] = useState('')
 
-  // Create campaign form state
-  const [showCreateForm, setShowCreateForm] = useState(false)
-  const [name, setName] = useState('')
-  const [totalQuantity, setTotalQuantity] = useState(100)
-  const [startTime, setStartTime] = useState('')
-  const [endTime, setEndTime] = useState('')
-  const [status, setStatus] = useState<'DRAFT' | 'ACTIVE' | 'ENDED'>('ACTIVE')
+  // Create Campaign Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [createName, setCreateName] = useState('')
+  const [createTotalQuantity, setCreateTotalQuantity] = useState(100)
+  const [createStartTime, setCreateStartTime] = useState('')
+  const [createEndTime, setCreateEndTime] = useState('')
+  const [createStatus, setCreateStatus] = useState<CampaignStatus>('ACTIVE')
   const [creating, setCreating] = useState(false)
   const [createError, setCreateError] = useState('')
 
-  // Edit campaign state
+  // Edit Campaign Modal State
   const [showEditModal, setShowEditModal] = useState(false)
-  const [editingCampaignId, setEditingCampaignId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
   const [editName, setEditName] = useState('')
   const [editTotalQuantity, setEditTotalQuantity] = useState(100)
   const [editStartTime, setEditStartTime] = useState('')
   const [editEndTime, setEditEndTime] = useState('')
-  const [editStatus, setEditStatus] = useState<'DRAFT' | 'ACTIVE' | 'ENDED'>('ACTIVE')
-  const [saving, setSaving] = useState(false)
+  const [editStatus, setEditStatus] = useState<CampaignStatus>('ACTIVE')
+  const [editing, setEditing] = useState(false)
   const [editError, setEditError] = useState('')
 
-  // Claims modal state
-  const [showClaimsModal, setShowClaimsModal] = useState(false)
-  const [claimsCampaign, setClaimsCampaign] = useState<Voucher | null>(null)
-  const [claimsList, setClaimsList] = useState<any[]>([])
-  const [claimsStats, setClaimsStats] = useState<any | null>(null)
-  const [claimsLoading, setClaimsLoading] = useState(false)
+  // Claims Audit & Stats Modal State
+  const [showAuditModal, setShowAuditModal] = useState(false)
+  const [auditStats, setAuditStats] = useState<CampaignStatsResponse | null>(null)
+  const [auditClaims, setAuditClaims] = useState<AdminClaimResponse[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
+
+  // Status Toggling State
+  const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const fetchCampaigns = async () => {
+    setLoading(true)
+    setErrorMsg('')
     try {
-      const response = await api.get<{ data: CampaignResponse[] }>('/api/v1/campaigns')
-      const mapped = (response.data.data || []).map(mapCampaignToVoucher)
-      setCampaigns(mapped)
-    } catch (err) {
-      console.error('Failed to fetch campaigns', err)
+      const res = await api.get<{ data: CampaignResponse[] }>('/api/v1/campaigns')
+      setCampaigns(res.data.data || [])
+    } catch (err: any) {
+      console.error(err)
+      setErrorMsg(err.response?.data?.message || 'Không thể tải danh sách chiến dịch')
+    } finally {
+      setLoading(false)
     }
   }
 
-  const fetchEvents = async () => {
-    try {
-      const response = await api.get<{ data: any[] }>('/api/v1/campaigns/events')
-      const mapped = (response.data.data || []).map(mapOutboxToEvent)
-      setEventsList(mapped)
-    } catch (err) {
-      console.error('Failed to fetch events', err)
+  useEffect(() => {
+    if (role === 'admin') {
+      fetchCampaigns()
     }
+  }, [role])
+
+  if (role !== 'admin') {
+    return <AuthRequired title="Bạn không có quyền truy cập vào Khu Vực Quản Trị Admin." />
   }
 
-  const handleCreateCampaign = async (e: React.FormEvent) => {
+  // Handle Create Campaign
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault()
     setCreating(true)
     setCreateError('')
 
     try {
       const payload = {
-        name,
-        totalQuantity: Number(totalQuantity),
-        startTime: new Date(startTime).toISOString(),
-        endTime: new Date(endTime).toISOString(),
-        status,
+        name: createName,
+        totalQuantity: Number(createTotalQuantity),
+        startTime: new Date(createStartTime).toISOString(),
+        endTime: new Date(createEndTime).toISOString(),
+        status: createStatus,
       }
 
       await api.post('/api/v1/campaigns', payload)
-      setName('')
-      setTotalQuantity(100)
-      setStartTime('')
-      setEndTime('')
-      setStatus('ACTIVE')
-      setShowCreateForm(false)
+      setCreateName('')
+      setCreateTotalQuantity(100)
+      setCreateStartTime('')
+      setCreateEndTime('')
+      setCreateStatus('ACTIVE')
+      setShowCreateModal(false)
       fetchCampaigns()
     } catch (err: any) {
       console.error(err)
-      setCreateError(err.response?.data?.message || 'Có lỗi xảy ra khi tạo chiến dịch')
+      setCreateError(err.response?.data?.message || 'Lỗi khi tạo chiến dịch')
     } finally {
       setCreating(false)
     }
   }
 
-  const handleOpenEditModal = (voucher: Voucher) => {
-    setEditingCampaignId(voucher.id)
-    setEditName(voucher.title)
-    setEditTotalQuantity(voucher.stock)
-    void loadEditData(voucher.id)
-  }
-
-  const loadEditData = async (id: string) => {
-    setShowEditModal(true)
+  // Open Edit Modal
+  const openEdit = (c: CampaignResponse) => {
+    setEditingId(c.id)
+    setEditName(c.name)
+    setEditTotalQuantity(c.totalQuantity)
+    setEditStartTime(c.startTime ? c.startTime.slice(0, 16) : '')
+    setEditEndTime(c.endTime ? c.endTime.slice(0, 16) : '')
+    setEditStatus(c.status)
     setEditError('')
-    setSaving(true)
-    try {
-      const response = await api.get<{ data: CampaignResponse }>(`/api/v1/campaigns/${id}`)
-      const c = response.data.data
-      setEditName(c.name)
-      setEditTotalQuantity(c.totalQuantity)
-      setEditStatus(c.status)
-      
-      const startLocal = new Date(c.startTime)
-      const offset = startLocal.getTimezoneOffset()
-      const localStart = new Date(startLocal.getTime() - (offset * 60 * 1000)).toISOString().slice(0, 16)
-
-      const endLocal = new Date(c.endTime)
-      const localEnd = new Date(endLocal.getTime() - (offset * 60 * 1000)).toISOString().slice(0, 16)
-
-      setEditStartTime(localStart)
-      setEditEndTime(localEnd)
-      setSaving(false)
-    } catch (err) {
-      console.error('Failed to load campaign for edit', err)
-      setEditError('Không thể tải dữ liệu chiến dịch để chỉnh sửa')
-      setSaving(false)
-    }
+    setShowEditModal(true)
   }
 
-  const handleSaveEdit = async (e: React.FormEvent) => {
+  // Handle Edit Submit
+  const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!editingCampaignId) return
-    setSaving(true)
+    if (!editingId) return
+    setEditing(true)
     setEditError('')
 
     try {
@@ -169,482 +136,537 @@ export function AdminPage({ role }: { role: Role }) {
         status: editStatus,
       }
 
-      await api.put(`/api/v1/campaigns/${editingCampaignId}`, payload)
+      await api.put(`/api/v1/campaigns/${editingId}`, payload)
       setShowEditModal(false)
       fetchCampaigns()
-      fetchEvents()
     } catch (err: any) {
       console.error(err)
-      setEditError(err.response?.data?.message || 'Có lỗi xảy ra khi cập nhật chiến dịch')
+      setEditError(err.response?.data?.message || 'Lỗi khi cập nhật chiến dịch')
     } finally {
-      setSaving(false)
+      setEditing(false)
     }
   }
 
-  const handleOpenClaimsModal = async (voucher: Voucher) => {
-    setClaimsCampaign(voucher)
-    setShowClaimsModal(true)
-    setClaimsLoading(true)
-    try {
-      const statsResponse = await api.get<{ data: any }>(`/api/v1/campaigns/${voucher.id}/stats`)
-      setClaimsStats(statsResponse.data.data)
+  // Handle Status Toggle (ACTIVE <-> ENDED or DRAFT -> ACTIVE)
+  const handleToggleStatus = async (c: CampaignResponse) => {
+    setTogglingId(c.id)
+    const nextStatus: CampaignStatus = c.status === 'ACTIVE' ? 'ENDED' : 'ACTIVE'
 
-      const claimsResponse = await api.get<{ data: any[] }>(`/api/v1/campaigns/${voucher.id}/claims`)
-      setClaimsList(claimsResponse.data.data || [])
-    } catch (err) {
-      console.error('Failed to load campaign stats & claims', err)
-    } finally {
-      setClaimsLoading(false)
-    }
-  }
-
-  const handleUpdateStatus = async (campaignId: string, newStatus: string) => {
     try {
-      await api.patch(`/api/v1/campaigns/${campaignId}/status?status=${newStatus}`)
+      await api.patch(`/api/v1/campaigns/${c.id}/status?status=${nextStatus}`)
       fetchCampaigns()
-      fetchEvents()
     } catch (err) {
-      console.error('Failed to update campaign status', err)
+      console.error('Failed to update status', err)
+    } finally {
+      setTogglingId(null)
     }
   }
 
-  const handleDeleteCampaign = async (campaignId: string) => {
+  // Handle Delete
+  const handleDelete = async (id: string) => {
     if (!window.confirm('Bạn có chắc chắn muốn xóa chiến dịch này không?')) return
+
     try {
-      await api.delete(`/api/v1/campaigns/${campaignId}`)
+      await api.delete(`/api/v1/campaigns/${id}`)
       fetchCampaigns()
-      fetchEvents()
     } catch (err) {
       console.error('Failed to delete campaign', err)
     }
   }
 
-  useEffect(() => {
-    if (role !== 'admin') return
+  // Open Audit & Stats Modal
+  const openAudit = async (id: string) => {
+    setShowAuditModal(true)
+    setAuditLoading(true)
+    setAuditStats(null)
+    setAuditClaims([])
 
-    const loadAll = async () => {
-      setLoading(true)
-      await Promise.all([fetchCampaigns(), fetchEvents()])
-      setLoading(false)
+    try {
+      const [statsRes, claimsRes] = await Promise.all([
+        api.get<{ data: CampaignStatsResponse }>(`/api/v1/campaigns/${id}/stats`),
+        api.get<{ data: AdminClaimResponse[] }>(`/api/v1/campaigns/${id}/claims?limit=50`),
+      ])
+      setAuditStats(statsRes.data.data)
+      setAuditClaims(claimsRes.data.data || [])
+    } catch (err) {
+      console.error('Failed to load audit logs', err)
+    } finally {
+      setAuditLoading(false)
     }
-
-    loadAll()
-
-    const timer = setInterval(() => {
-      fetchCampaigns()
-      fetchEvents()
-    }, 5000)
-
-    return () => clearInterval(timer)
-  }, [role])
-
-  if (role !== 'admin') {
-    return <AuthRequired title="Chỉ admin mới truy cập được trang quản trị." />
   }
 
+  // Derived Summary Stats
+  const totalCampaignsCount = campaigns.length
+  const activeCount = campaigns.filter((c) => c.status === 'ACTIVE').length
+  const totalClaimedCount = campaigns.reduce((acc, c) => acc + (c.totalQuantity - c.remainingQuantity), 0)
+
   return (
-    <>
-    <section className="grid gap-5">
-      <SectionHead eyebrow="Admin role" title="Campaign control room">
-        <span className="badge badge-success gap-2 p-4 text-success-content">
-          <ShieldCheck size={15} />
-          Zero oversell active
-        </span>
-      </SectionHead>
+    <div className="flex flex-col gap-8 py-4">
+      {/* Header Bar */}
+      <div className="glass-panel flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-3xl p-6 sm:p-8">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-amber-400 block mb-1 flex items-center gap-1.5">
+            <ShieldCheck size={16} />
+            Admin Dashboard
+          </span>
+          <h1 className="text-3xl font-black text-white">Quản Lý Chiến Dịch Voucher</h1>
+        </div>
 
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={fetchCampaigns}
+            className="flex items-center gap-2 rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-3 text-sm font-bold transition cursor-pointer"
+            title="Tải lại danh sách"
+          >
+            <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+            Làm mới
+          </button>
 
+          <button
+            type="button"
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center gap-2 rounded-2xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-white font-bold px-5 py-3 text-sm shadow-lg shadow-amber-500/25 transition hover:scale-105 cursor-pointer"
+          >
+            <PlusCircle size={18} />
+            Tạo Chiến Dịch Mới
+          </button>
+        </div>
+      </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,0.85fr)]">
-        <div className="card border border-base-300 bg-base-100 shadow-sm">
-          <div className="card-body gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase text-warning">Inventory</p>
-                <h2 className="text-2xl font-black">Campaign stock</h2>
-              </div>
-              <button
-                className="btn btn-primary btn-sm rounded-full"
-                type="button"
-                onClick={() => setShowCreateForm(!showCreateForm)}
-              >
-                <PlusCircle size={17} />
-                Tạo chiến dịch
-              </button>
-            </div>
+      {/* Metrics Overview Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div className="glass-panel flex items-center gap-4 rounded-3xl p-6 border border-slate-800">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <BarChart3 size={24} />
+          </div>
+          <div>
+            <span className="text-xs font-bold text-slate-400 block">Tổng Chiến Dịch</span>
+            <p className="text-2xl font-black text-white">{totalCampaignsCount}</p>
+          </div>
+        </div>
 
-            {showCreateForm && (
-              <form onSubmit={handleCreateCampaign} className="rounded-xl border border-primary/20 bg-primary/5 p-4 grid gap-3">
-                <h3 className="font-bold text-base-content">Tạo chiến dịch mới</h3>
-                {createError && <p className="text-xs font-bold text-error">{createError}</p>}
-                
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <label className="form-control w-full">
-                    <span className="label-text font-semibold mb-1">Tên chiến dịch</span>
-                    <input
-                      type="text"
-                      placeholder="e.g. Summer Flash Voucher 40%"
-                      className="input input-bordered input-sm"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="form-control w-full">
-                    <span className="label-text font-semibold mb-1">Số lượng voucher (Stock)</span>
-                    <input
-                      type="number"
-                      min="1"
-                      className="input input-bordered input-sm"
-                      value={totalQuantity}
-                      onChange={(e) => setTotalQuantity(Number(e.target.value))}
-                      required
-                    />
-                  </label>
-                  <label className="form-control w-full">
-                    <span className="label-text font-semibold mb-1">Thời gian bắt đầu</span>
-                    <input
-                      type="datetime-local"
-                      className="input input-bordered input-sm"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="form-control w-full">
-                    <span className="label-text font-semibold mb-1">Thời gian kết thúc</span>
-                    <input
-                      type="datetime-local"
-                      className="input input-bordered input-sm"
-                      value={endTime}
-                      onChange={(e) => setEndTime(e.target.value)}
-                      required
-                    />
-                  </label>
-                  <label className="form-control w-full">
-                    <span className="label-text font-semibold mb-1">Trạng thái</span>
-                    <select
-                      className="select select-bordered select-sm w-full"
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value as any)}
-                    >
-                      <option value="DRAFT">Nháp (DRAFT)</option>
-                      <option value="ACTIVE">Hoạt động (ACTIVE)</option>
-                      <option value="ENDED">Kết thúc (ENDED)</option>
-                    </select>
-                  </label>
-                </div>
-                <div className="flex justify-end gap-2 mt-2">
-                  <button className="btn btn-ghost btn-sm" type="button" onClick={() => setShowCreateForm(false)}>
-                    Hủy
-                  </button>
-                  <button className="btn btn-primary btn-sm" type="submit" disabled={creating}>
-                    {creating && <Loader2 className="animate-spin" size={14} />}
-                    Lưu
-                  </button>
-                </div>
-              </form>
-            )}
+        <div className="glass-panel flex items-center gap-4 rounded-3xl p-6 border border-slate-800">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+            <CheckCircle2 size={24} />
+          </div>
+          <div>
+            <span className="text-xs font-bold text-slate-400 block">Đang Hoạt Động (Active)</span>
+            <p className="text-2xl font-black text-emerald-400">{activeCount}</p>
+          </div>
+        </div>
 
-            {loading ? (
-              <div className="grid min-h-32 place-items-center">
-                <Loader2 className="animate-spin text-primary" size={28} />
-              </div>
-            ) : campaigns.length === 0 ? (
-              <p className="text-sm text-base-content/65 text-center py-6">Không có chiến dịch nào.</p>
-            ) : (
-              <div className="grid gap-3">
-                {campaigns.map((voucher) => (
-                  <div className="rounded-lg border border-base-300 bg-base-100 p-4" key={voucher.id}>
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <span className={`size-3 rounded-full ${statusDotClass(voucher.status)}`} />
-                        <div className="min-w-0">
-                          <strong className="block truncate">{voucher.title}</strong>
-                          <span className="block truncate text-xs font-mono text-base-content/50">
-                            {voucher.id}
-                          </span>
-                        </div>
-                      </div>
-                      <div className="text-left sm:text-right">
-                        <strong className="block">{formatNumber(voucher.remaining)}</strong>
-                        <span className="text-sm text-base-content/60">
-                          of {formatNumber(voucher.stock)} left
-                        </span>
-                      </div>
-                    </div>
-                    <progress
-                      className="progress progress-primary mt-3 h-2"
-                      max="100"
-                      value={remainingPercent(voucher)}
-                    />
-                    
-                    <div className="flex flex-wrap items-center justify-between gap-2 mt-3 pt-3 border-t border-base-200">
-                      <span className="text-xs text-base-content/50 font-semibold">
-                        Trạng thái DB: <span className="font-bold text-primary">{voucher.rawStatus}</span>
+        <div className="glass-panel flex items-center gap-4 rounded-3xl p-6 border border-slate-800">
+          <div className="flex size-12 items-center justify-center rounded-2xl bg-purple-500/10 text-purple-400 border border-purple-500/20">
+            <Users size={24} />
+          </div>
+          <div>
+            <span className="text-xs font-bold text-slate-400 block">Đã Được Săn (Claims)</span>
+            <p className="text-2xl font-black text-purple-400">{formatNumber(totalClaimedCount)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Campaign Management Table */}
+      <div className="glass-panel overflow-hidden rounded-3xl border border-slate-800">
+        <div className="p-6 border-b border-slate-800">
+          <h2 className="text-xl font-bold text-white">Danh Sách Quản Lý Chiến Dịch</h2>
+        </div>
+
+        {loading ? (
+          <div className="grid h-64 place-items-center">
+            <Loader2 className="animate-spin text-amber-400" size={36} />
+          </div>
+        ) : errorMsg ? (
+          <div className="p-8 text-center text-rose-400 font-semibold">{errorMsg}</div>
+        ) : campaigns.length === 0 ? (
+          <div className="p-12 text-center text-slate-400">Chưa có chiến dịch nào trong hệ thống.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm text-slate-300">
+              <thead className="bg-slate-900/80 text-xs font-bold uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                <tr>
+                  <th className="py-4 px-6">Tên Chiến Dịch</th>
+                  <th className="py-4 px-6">Trạng Thái</th>
+                  <th className="py-4 px-6">Số Lượng (Còn / Tổng)</th>
+                  <th className="py-4 px-6">Thời Gian</th>
+                  <th className="py-4 px-6 text-right">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800/60">
+                {campaigns.map((c) => (
+                  <tr key={c.id} className="hover:bg-slate-800/40 transition">
+                    <td className="py-4 px-6 font-bold text-white">
+                      {c.name}
+                      <span className="block text-[10px] font-mono text-slate-500 font-normal">{c.id}</span>
+                    </td>
+                    <td className="py-4 px-6">
+                      <span className={`inline-flex items-center rounded-xl px-3 py-1 text-xs font-bold ${rawStatusBadgeClass(c.status)}`}>
+                        {c.status}
                       </span>
-                      <div className="flex items-center gap-2">
+                    </td>
+                    <td className="py-4 px-6 font-mono font-bold">
+                      <span className="text-emerald-400">{formatNumber(c.remainingQuantity)}</span> /{' '}
+                      <span className="text-slate-300">{formatNumber(c.totalQuantity)}</span>
+                    </td>
+                    <td className="py-4 px-6 text-xs text-slate-400 space-y-1">
+                      <div>BD: {formatDate(c.startTime)}</div>
+                      <div>KT: {formatDate(c.endTime)}</div>
+                    </td>
+                    <td className="py-4 px-6 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        {/* Audit / Claims button */}
                         <button
-                          className="btn btn-info btn-outline btn-xs gap-1"
                           type="button"
-                          onClick={() => handleOpenClaimsModal(voucher)}
+                          onClick={() => openAudit(c.id)}
+                          className="flex items-center gap-1 rounded-xl bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+                          title="Xem Audit Logs"
                         >
-                          Lượt claim
+                          <Eye size={14} />
+                          Audit
                         </button>
-                        {voucher.rawStatus !== 'ENDED' && (
-                          <button
-                            className="btn btn-neutral btn-xs gap-1"
-                            type="button"
-                            onClick={() => handleOpenEditModal(voucher)}
-                          >
-                            Sửa
-                          </button>
-                        )}
-                        {voucher.rawStatus === 'DRAFT' && (
-                          <button
-                            className="btn btn-success btn-xs gap-1 text-success-content"
-                            type="button"
-                            onClick={() => handleUpdateStatus(voucher.id, 'ACTIVE')}
-                          >
-                            <Play size={12} />
-                            Kích hoạt
-                          </button>
-                        )}
-                        {voucher.rawStatus === 'ACTIVE' && (
-                          <button
-                            className="btn btn-warning btn-xs gap-1 text-warning-content"
-                            type="button"
-                            onClick={() => handleUpdateStatus(voucher.id, 'ENDED')}
-                          >
-                            <Square size={12} />
-                            Kết thúc
-                          </button>
-                        )}
-                        {(voucher.stock === voucher.remaining) && (
-                          <button
-                            className="btn btn-error btn-outline btn-xs gap-1"
-                            type="button"
-                            onClick={() => handleDeleteCampaign(voucher.id)}
-                          >
-                            <Trash2 size={12} />
-                            Xóa
-                          </button>
-                        )}
+
+                        {/* Toggle Status */}
+                        <button
+                          type="button"
+                          disabled={togglingId === c.id}
+                          onClick={() => handleToggleStatus(c)}
+                          className="flex items-center gap-1 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+                          title="Đổi trạng thái Active/Ended"
+                        >
+                          {togglingId === c.id ? (
+                            <Loader2 size={14} className="animate-spin" />
+                          ) : (
+                            <ToggleRight size={14} />
+                          )}
+                          Status
+                        </button>
+
+                        {/* Edit button */}
+                        <button
+                          type="button"
+                          onClick={() => openEdit(c)}
+                          className="flex items-center gap-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+                          title="Chỉnh sửa"
+                        >
+                          <Edit3 size={14} />
+                          Sửa
+                        </button>
+
+                        {/* Delete button */}
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(c.id)}
+                          className="flex items-center gap-1 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 px-3 py-1.5 text-xs font-bold transition cursor-pointer"
+                          title="Xóa chiến dịch"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
-                    </div>
-                  </div>
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
-        </div>
-
-        <div className="card border border-base-300 bg-base-100 shadow-sm">
-          <div className="card-body gap-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-xs font-black uppercase text-warning">Kafka and outbox</p>
-                <h2 className="text-2xl font-black">Event stream</h2>
-              </div>
-            </div>
-
-            {loading ? (
-              <div className="grid min-h-32 place-items-center">
-                <Loader2 className="animate-spin text-primary" size={28} />
-              </div>
-            ) : eventsList.length === 0 ? (
-              <p className="text-sm text-base-content/65 text-center py-6">Không có sự kiện outbox nào được ghi nhận.</p>
-            ) : (
-              <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-1">
-                {eventsList.map((event, idx) => (
-                  <article
-                    className="grid grid-cols-[auto_1fr] gap-3 border-b border-base-300 pb-3 last:border-b-0 last:pb-0"
-                    key={`${event.time}-${idx}`}
-                  >
-                    <span className={`mt-2 size-3 rounded-full ${eventDotClass(event.status)}`} />
-                    <div className="min-w-0">
-                      <time className="text-xs font-black text-base-content/50">{event.time}</time>
-                      <strong className="block text-sm truncate">{event.title}</strong>
-                      <p className="text-xs text-base-content/60 break-all">{event.detail}</p>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
-    </section>
 
-    {showEditModal && (
-      <div className="modal modal-open z-50">
-        <div className="modal-box max-w-lg bg-base-100 rounded-3xl p-6 relative">
-          <button
-            className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
-            type="button"
-            onClick={() => setShowEditModal(false)}
-          >
-            ✕
-          </button>
-          <h3 className="font-black text-2xl text-base-content mb-4">Chỉnh sửa chiến dịch</h3>
-          {editError && <p className="text-xs font-bold text-error mb-3">{editError}</p>}
-
-          <form onSubmit={handleSaveEdit} className="grid gap-3">
-            <label className="form-control w-full">
-              <span className="label-text font-semibold mb-1">Tên chiến dịch</span>
-              <input
-                type="text"
-                className="input input-bordered input-sm"
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                required
-                disabled={saving}
-              />
-            </label>
-            <label className="form-control w-full">
-              <span className="label-text font-semibold mb-1">Số lượng voucher (Stock)</span>
-              <input
-                type="number"
-                min="1"
-                className="input input-bordered input-sm"
-                value={editTotalQuantity}
-                onChange={(e) => setEditTotalQuantity(Number(e.target.value))}
-                required
-                disabled={saving}
-              />
-            </label>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="form-control w-full">
-                <span className="label-text font-semibold mb-1">Thời gian bắt đầu</span>
-                <input
-                  type="datetime-local"
-                  className="input input-bordered input-sm"
-                  value={editStartTime}
-                  onChange={(e) => setEditStartTime(e.target.value)}
-                  required
-                  disabled={saving}
-                />
-              </label>
-              <label className="form-control w-full">
-                <span className="label-text font-semibold mb-1">Thời gian kết thúc</span>
-                <input
-                  type="datetime-local"
-                  className="input input-bordered input-sm"
-                  value={editEndTime}
-                  onChange={(e) => setEditEndTime(e.target.value)}
-                  required
-                  disabled={saving}
-                />
-              </label>
-            </div>
-            <label className="form-control w-full">
-              <span className="label-text font-semibold mb-1">Trạng thái</span>
-              <select
-                className="select select-bordered select-sm w-full"
-                value={editStatus}
-                onChange={(e) => setEditStatus(e.target.value as any)}
-                disabled={saving}
-              >
-                <option value="DRAFT">Nháp (DRAFT)</option>
-                <option value="ACTIVE">Hoạt động (ACTIVE)</option>
-                <option value="ENDED">Kết thúc (ENDED)</option>
-              </select>
-            </label>
-            <div className="flex justify-end gap-2 mt-4">
+      {/* CREATE CAMPAIGN MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <PlusCircle className="text-amber-400" size={20} />
+                Tạo Chiến Dịch Voucher Mới
+              </h3>
               <button
-                className="btn btn-ghost btn-sm"
                 type="button"
-                onClick={() => setShowEditModal(false)}
-                disabled={saving}
+                onClick={() => setShowCreateModal(false)}
+                className="text-slate-400 hover:text-white font-bold p-1 rounded-lg hover:bg-slate-800"
               >
-                Hủy
-              </button>
-              <button className="btn btn-primary btn-sm" type="submit" disabled={saving}>
-                {saving && <Loader2 className="animate-spin" size={14} />}
-                Lưu thay đổi
+                ✕
               </button>
             </div>
-          </form>
-        </div>
-      </div>
-    )}
 
-    {showClaimsModal && claimsCampaign && (
-      <div className="modal modal-open z-50">
-        <div className="modal-box max-w-2xl bg-base-100 rounded-3xl p-6 relative">
-          <button
-            className="btn btn-sm btn-circle btn-ghost absolute right-4 top-4"
-            type="button"
-            onClick={() => {
-              setShowClaimsModal(false)
-              setClaimsCampaign(null)
-              setClaimsStats(null)
-              setClaimsList([])
-            }}
-          >
-            ✕
-          </button>
-          <h3 className="font-black text-2xl text-base-content mb-2">Thống kê & Lượt claim</h3>
-          <p className="text-sm text-base-content/60 mb-4">Chiến dịch: <span className="font-bold text-primary">{claimsCampaign.title}</span></p>
-
-          {claimsLoading ? (
-            <div className="grid h-48 place-items-center">
-              <Loader2 className="animate-spin text-primary" size={28} />
-            </div>
-          ) : (
-            <div className="grid gap-6">
-              {claimsStats && (
-                <div className="grid grid-cols-3 gap-3 bg-base-200 p-4 rounded-2xl text-center">
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-base-content/45 block">Tổng phát hành</span>
-                    <strong className="text-base text-base-content font-bold">{formatNumber(claimsStats.totalQuantity)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-base-content/45 block">Đã claim</span>
-                    <strong className="text-base text-primary font-bold">{formatNumber(claimsStats.claimedCount)}</strong>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-black uppercase text-base-content/45 block">Còn lại trong kho</span>
-                    <strong className="text-base text-success font-bold">{formatNumber(claimsStats.remainingQuantity)}</strong>
-                  </div>
+            <form onSubmit={handleCreate} className="mt-4 flex flex-col gap-4 text-sm">
+              {createError && (
+                <div className="rounded-xl bg-rose-500/20 p-3 text-xs font-semibold text-rose-300 border border-rose-500/30">
+                  {createError}
                 </div>
               )}
 
               <div>
-                <h4 className="font-black text-base-content mb-2 uppercase text-xs tracking-wider">Danh sách tài khoản đã claim ({claimsList.length})</h4>
-                {claimsList.length === 0 ? (
-                  <p className="text-sm text-base-content/50 py-6 text-center border border-dashed border-base-300 rounded-2xl">
-                    Chưa có lượt claim nào được ghi nhận.
-                  </p>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Tên Chiến Dịch *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="Ví dụ: Flash Sale 50% Off"
+                  value={createName}
+                  onChange={(e) => setCreateName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Tổng Số Lượng Voucher *</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={createTotalQuantity}
+                  onChange={(e) => setCreateTotalQuantity(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Thời Gian Bắt Đầu *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={createStartTime}
+                    onChange={(e) => setCreateStartTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-white focus:border-amber-500 focus:outline-none text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Thời Gian Kết Thúc *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={createEndTime}
+                    onChange={(e) => setCreateEndTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-white focus:border-amber-500 focus:outline-none text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Trạng Thái Ban Đầu *</label>
+                <select
+                  value={createStatus}
+                  onChange={(e) => setCreateStatus(e.target.value as CampaignStatus)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="ACTIVE">ACTIVE (Kích hoạt ngay)</option>
+                  <option value="DRAFT">DRAFT (Bản nháp)</option>
+                  <option value="ENDED">ENDED (Kết thúc)</option>
+                </select>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="rounded-xl bg-slate-800 px-4 py-2.5 font-bold text-slate-300 hover:bg-slate-700"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={creating}
+                  className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 transition cursor-pointer"
+                >
+                  {creating && <Loader2 size={16} className="animate-spin" />}
+                  Tạo Mới
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CAMPAIGN MODAL */}
+      {showEditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="glass-panel w-full max-w-lg rounded-3xl p-6 shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Edit3 className="text-amber-400" size={20} />
+                Cập Nhật Chiến Dịch
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowEditModal(false)}
+                className="text-slate-400 hover:text-white font-bold p-1 rounded-lg hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="mt-4 flex flex-col gap-4 text-sm">
+              {editError && (
+                <div className="rounded-xl bg-rose-500/20 p-3 text-xs font-semibold text-rose-300 border border-rose-500/30">
+                  {editError}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Tên Chiến Dịch *</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Tổng Số Lượng *</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  value={editTotalQuantity}
+                  onChange={(e) => setEditTotalQuantity(Number(e.target.value))}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white focus:border-amber-500 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Bắt Đầu *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editStartTime}
+                    onChange={(e) => setEditStartTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-white focus:border-amber-500 focus:outline-none text-xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-300 mb-1">Kết Thúc *</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editEndTime}
+                    onChange={(e) => setEditEndTime(e.target.value)}
+                    className="w-full rounded-xl border border-slate-700 bg-slate-900 p-2.5 text-white focus:border-amber-500 focus:outline-none text-xs"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-300 mb-1">Trạng Thái *</label>
+                <select
+                  value={editStatus}
+                  onChange={(e) => setEditStatus(e.target.value as CampaignStatus)}
+                  className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-white focus:border-amber-500 focus:outline-none"
+                >
+                  <option value="ACTIVE">ACTIVE</option>
+                  <option value="DRAFT">DRAFT</option>
+                  <option value="ENDED">ENDED</option>
+                </select>
+              </div>
+
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="rounded-xl bg-slate-800 px-4 py-2.5 font-bold text-slate-300 hover:bg-slate-700"
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  disabled={editing}
+                  className="flex items-center gap-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-6 py-2.5 transition cursor-pointer"
+                >
+                  {editing && <Loader2 size={16} className="animate-spin" />}
+                  Lưu Thay Đổi
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* AUDIT CLAIMS LOGS MODAL */}
+      {showAuditModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm animate-in fade-in">
+          <div className="glass-panel w-full max-w-2xl max-h-[85vh] flex flex-col rounded-3xl p-6 shadow-2xl border border-slate-700">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800 shrink-0">
+              <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                <Eye className="text-indigo-400" size={20} />
+                Lịch Sử Săn Voucher (Audit Claims Log)
+              </h3>
+              <button
+                type="button"
+                onClick={() => setShowAuditModal(false)}
+                className="text-slate-400 hover:text-white font-bold p-1 rounded-lg hover:bg-slate-800"
+              >
+                ✕
+              </button>
+            </div>
+
+            {auditLoading ? (
+              <div className="grid h-64 place-items-center">
+                <Loader2 className="animate-spin text-indigo-400" size={32} />
+              </div>
+            ) : (
+              <div className="flex-1 overflow-y-auto mt-4 space-y-4 pr-1">
+                {auditStats && (
+                  <div className="grid grid-cols-3 gap-3 bg-slate-900/80 p-4 rounded-2xl border border-slate-800 text-xs">
+                    <div>
+                      <span className="text-slate-400 block">Tên chiến dịch:</span>
+                      <strong className="text-white font-bold text-sm truncate block">{auditStats.name}</strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Còn lại / Tổng:</span>
+                      <strong className="text-emerald-400 font-bold text-sm">
+                        {auditStats.remainingQuantity} / {auditStats.totalQuantity}
+                      </strong>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block">Lượt đã Săn:</span>
+                      <strong className="text-purple-400 font-bold text-sm">{auditStats.claimedCount}</strong>
+                    </div>
+                  </div>
+                )}
+
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Danh sách User Claims ({auditClaims.length})
+                </h4>
+
+                {auditClaims.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-slate-400">Chưa có lượt claim nào cho chiến dịch này.</p>
                 ) : (
-                  <div className="max-h-64 overflow-y-auto border border-base-200 rounded-2xl">
-                    <table className="table table-xs w-full">
-                      <thead>
-                        <tr>
-                          <th>Mã lượt claim</th>
-                          <th>Mã User ID (Keycloak)</th>
-                          <th>Thời gian claim</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {claimsList.map((claim) => (
-                          <tr key={claim.id}>
-                            <td className="font-mono text-[10px] select-all">{claim.id}</td>
-                            <td className="font-mono text-[10px] select-all">{claim.userId}</td>
-                            <td className="text-[11px] font-semibold">
-                              {new Date(claim.claimedAt).toLocaleString('vi-VN')}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                  <div className="space-y-2">
+                    {auditClaims.map((claim) => (
+                      <div
+                        key={claim.id}
+                        className="flex items-center justify-between bg-slate-900/60 p-3 rounded-2xl border border-slate-800 text-xs"
+                      >
+                        <div>
+                          <span className="block font-mono text-indigo-300 font-semibold">User ID: {claim.userId}</span>
+                          <span className="text-[10px] font-mono text-slate-500">Claim ID: {claim.id}</span>
+                        </div>
+                        <span className="font-mono text-slate-400 text-[11px]">{formatDate(claim.claimedAt)}</span>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
+            )}
+
+            <div className="mt-6 flex justify-end shrink-0 pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowAuditModal(false)}
+                className="rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-700"
+              >
+                Đóng
+              </button>
             </div>
-          )}
+          </div>
         </div>
-      </div>
-    )}
-  </>
+      )}
+    </div>
   )
 }
