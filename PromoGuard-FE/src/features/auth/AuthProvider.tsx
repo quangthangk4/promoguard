@@ -55,10 +55,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [username, setUsername] = useState<string | undefined>()
 
   const syncAuthState = useCallback(() => {
-    setAuthenticated(Boolean(keycloak.authenticated))
+    const isAuth = Boolean(keycloak.authenticated)
+    setAuthenticated(isAuth)
     setRole(getRole())
     setToken(keycloak.token)
     setUsername(getUsername())
+
+    if (isAuth && keycloak.token && keycloak.refreshToken) {
+      localStorage.setItem('kc_token', keycloak.token)
+      localStorage.setItem('kc_refreshToken', keycloak.refreshToken)
+    } else if (!isAuth) {
+      localStorage.removeItem('kc_token')
+      localStorage.removeItem('kc_refreshToken')
+    }
   }, [])
 
   useEffect(() => {
@@ -76,15 +85,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch((error: unknown) => {
         console.error('Failed to initialize Keycloak', error)
         if (active) {
+          localStorage.removeItem('kc_token')
+          localStorage.removeItem('kc_refreshToken')
           setInitialized(true)
         }
       })
 
     keycloak.onAuthSuccess = syncAuthState
     keycloak.onAuthRefreshSuccess = syncAuthState
-    keycloak.onAuthLogout = syncAuthState
+    keycloak.onAuthLogout = () => {
+      localStorage.removeItem('kc_token')
+      localStorage.removeItem('kc_refreshToken')
+      syncAuthState()
+    }
     keycloak.onTokenExpired = () => {
-      keycloak.updateToken(30).then(syncAuthState).catch(() => keycloak.login())
+      keycloak
+        .updateToken(30)
+        .then(syncAuthState)
+        .catch(() => {
+          localStorage.removeItem('kc_token')
+          localStorage.removeItem('kc_refreshToken')
+          keycloak.login()
+        })
     }
 
     return () => {
@@ -101,7 +123,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       username,
       login: () => keycloak.login({ redirectUri: window.location.origin + '/login' }),
       register: () => keycloak.register({ redirectUri: window.location.origin + '/login' }),
-      logout: () => keycloak.logout({ redirectUri: window.location.origin }),
+      logout: async () => {
+        localStorage.removeItem('kc_token')
+        localStorage.removeItem('kc_refreshToken')
+        await keycloak.logout({ redirectUri: window.location.origin })
+      },
     }),
     [authenticated, initialized, role, token, username],
   )
