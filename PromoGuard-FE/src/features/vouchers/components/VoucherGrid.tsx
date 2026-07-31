@@ -35,19 +35,33 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
     setClaiming(true)
     setMessage(null)
     try {
-      const response = await api.post<ClaimResponse>(`/api/v1/campaigns/${voucher.id}/claim`)
+      const response = await api.post<{
+        success: boolean
+        message: string
+        data?: ClaimResponse
+      }>(`/api/v1/campaigns/${voucher.id}/claim`)
+
       const apiResp = response.data
 
-      if (apiResp.result === 'SUCCESS') {
-        setMessage({ type: 'success', text: apiResp.message || 'Săn voucher thành công!' })
+      if (apiResp.success || apiResp.data?.result === 'SUCCESS') {
+        setMessage({
+          type: 'success',
+          text: apiResp.data?.message || apiResp.message || 'Săn voucher thành công!',
+        })
         setLocalRemaining((prev) => Math.max(0, prev - 1))
         if (onClaimed) onClaimed()
       } else {
-        setMessage({ type: 'error', text: apiResp.message || 'Claim thất bại' })
+        setMessage({
+          type: 'error',
+          text: apiResp.message || apiResp.data?.message || 'Claim thất bại',
+        })
       }
     } catch (error: any) {
       console.error(error)
-      const errorMsg = error.response?.data?.message || 'Có lỗi xảy ra khi claim voucher'
+      const errorMsg =
+        error.response?.data?.message ||
+        error.response?.data?.data?.message ||
+        'Có lỗi xảy ra khi claim voucher'
       setMessage({ type: 'error', text: errorMsg })
     } finally {
       setClaiming(false)
