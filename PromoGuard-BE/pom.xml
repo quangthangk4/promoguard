@@ -33,6 +33,7 @@
 		<db.user>promoguard</db.user>
 		<db.password>promoguard</db.password>
 		<jooq.codegen.skip>false</jooq.codegen.skip>
+		<flyway.skip>false</flyway.skip>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -175,6 +176,7 @@
 					</execution>
 				</executions>
 				<configuration>
+					<skip>${flyway.skip}</skip>
 					<url>${db.url}</url>
 					<user>${db.user}</user>
 					<password>${db.password}</password>

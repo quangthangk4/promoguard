@@ -25,6 +25,17 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
 
   private final DSLContext dsl;
 
+  public static CampaignStatus parseStatus(String status) {
+    if (status == null) {
+      return CampaignStatus.DRAFT;
+    }
+    try {
+      return CampaignStatus.valueOf(status.trim().toUpperCase());
+    } catch (Exception e) {
+      return CampaignStatus.ACTIVE;
+    }
+  }
+
   public CampaignsRepositoryImpl(DSLContext dsl) {
     this.dsl = dsl;
   }
@@ -45,7 +56,7 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
             CAMPAIGNS.NAME,
             CAMPAIGNS.TOTAL_QUANTITY,
             CAMPAIGNS.REMAINING_QUANTITY,
-            CAMPAIGNS.STATUS.convertFrom(CampaignStatus::valueOf),
+            CAMPAIGNS.STATUS.convertFrom(CampaignsRepositoryImpl::parseStatus),
             CAMPAIGNS.START_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.END_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.CREATED_AT.convertFrom(OffsetDateTime::toInstant)
@@ -60,7 +71,7 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
             CAMPAIGNS.NAME,
             CAMPAIGNS.TOTAL_QUANTITY,
             CAMPAIGNS.REMAINING_QUANTITY,
-            CAMPAIGNS.STATUS.convertFrom(CampaignStatus::valueOf),
+            CAMPAIGNS.STATUS.convertFrom(CampaignsRepositoryImpl::parseStatus),
             CAMPAIGNS.START_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.END_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.CREATED_AT.convertFrom(OffsetDateTime::toInstant)
@@ -82,7 +93,7 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
                     .from(VOUCHER_CLAIMS)
                     .where(VOUCHER_CLAIMS.CAMPAIGN_ID.eq(CAMPAIGNS.ID))
             ),
-            CAMPAIGNS.STATUS.convertFrom(CampaignStatus::valueOf)
+            CAMPAIGNS.STATUS.convertFrom(CampaignsRepositoryImpl::parseStatus)
         )
         .from(CAMPAIGNS)
         .where(CAMPAIGNS.ID.eq(id))
@@ -139,7 +150,7 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
             CAMPAIGNS.NAME,
             CAMPAIGNS.TOTAL_QUANTITY,
             CAMPAIGNS.REMAINING_QUANTITY,
-            CAMPAIGNS.STATUS.convertFrom(CampaignStatus::valueOf),
+            CAMPAIGNS.STATUS.convertFrom(CampaignsRepositoryImpl::parseStatus),
             CAMPAIGNS.START_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.END_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.CREATED_AT.convertFrom(OffsetDateTime::toInstant)
@@ -164,7 +175,7 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
             CAMPAIGNS.NAME,
             CAMPAIGNS.TOTAL_QUANTITY,
             CAMPAIGNS.REMAINING_QUANTITY,
-            CAMPAIGNS.STATUS.convertFrom(CampaignStatus::valueOf),
+            CAMPAIGNS.STATUS.convertFrom(CampaignsRepositoryImpl::parseStatus),
             CAMPAIGNS.START_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.END_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.CREATED_AT.convertFrom(OffsetDateTime::toInstant)
@@ -202,7 +213,7 @@ public class CampaignsRepositoryImpl implements CampaignsRepository {
             CAMPAIGNS.NAME,
             CAMPAIGNS.TOTAL_QUANTITY,
             CAMPAIGNS.REMAINING_QUANTITY,
-            CAMPAIGNS.STATUS.convertFrom(CampaignStatus::valueOf),
+            CAMPAIGNS.STATUS.convertFrom(CampaignsRepositoryImpl::parseStatus),
             CAMPAIGNS.START_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.END_TIME.convertFrom(OffsetDateTime::toInstant),
             CAMPAIGNS.CREATED_AT.convertFrom(OffsetDateTime::toInstant)
