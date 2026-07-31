@@ -14,8 +14,10 @@ export function HomePage({ role }: { role: Role }) {
 
   const loadCampaigns = async () => {
     try {
-      const response = await api.get<{ data: CampaignResponse[] }>('/api/v1/campaigns')
-      const mapped = (response.data.data || []).map(mapCampaignToVoucher)
+      const response = await api.get<{ data: CampaignResponse[] }>('/api/v1/campaigns?status=ACTIVE')
+      const mapped = (response.data.data || [])
+        .map(mapCampaignToVoucher)
+        .filter((v) => v.status === 'Active')
       setVouchersList(mapped)
     } catch (err) {
       console.error('Failed to load campaigns', err)
