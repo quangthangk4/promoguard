@@ -74,7 +74,7 @@ jobs:
           tags: ghcr.io/${{ steps.repo_owner.outputs.owner }}/promoguard-fe:latest
           build-args: |
             VITE_API_URL=http://${{ secrets.VPS_HOST }}:8080
-            VITE_KEYCLOAK_URL=http://${{ secrets.VPS_HOST }}:8082
+            VITE_KEYCLOAK_URL=https://thanghcmut-promoguard.site/auth
 
   deploy-to-vps:
     needs: build-and-push
