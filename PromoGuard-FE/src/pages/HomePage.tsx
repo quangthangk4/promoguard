@@ -12,7 +12,8 @@ export function HomePage({ role }: { role: Role }) {
   const [vouchersList, setVouchersList] = useState<Voucher[]>([])
   const [loading, setLoading] = useState(true)
 
-  const loadCampaigns = async () => {
+  const loadCampaigns = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
       const response = await api.get<{ data: CampaignResponse[] }>('/api/v1/campaigns?status=ACTIVE')
       const mapped = (response.data.data || [])
@@ -22,7 +23,7 @@ export function HomePage({ role }: { role: Role }) {
     } catch (err) {
       console.error('Failed to load campaigns', err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -149,7 +150,7 @@ export function HomePage({ role }: { role: Role }) {
             <Loader2 className="animate-spin text-indigo-400" size={32} />
           </div>
         ) : (
-          <VoucherGrid vouchers={vouchersList.slice(0, 6)} role={role} onClaimed={loadCampaigns} />
+          <VoucherGrid vouchers={vouchersList.slice(0, 6)} role={role} onClaimed={() => loadCampaigns(true)} />
         )}
       </section>
     </div>

@@ -29,7 +29,9 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
     }
   }
 
-  const handleClaim = async () => {
+  const handleClaim = async (e: React.MouseEvent) => {
+    e.stopPropagation() // Ngăn chặn mở Modal Chi tiết khi bấm nút Claim
+
     if (role === 'guest') return
 
     setClaiming(true)
@@ -80,7 +82,10 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
 
   return (
     <>
-      <article className="glass-panel glass-panel-hover relative flex flex-col justify-between overflow-hidden rounded-3xl p-6 transition-all">
+      <article
+        onClick={handleOpenDetail}
+        className="glass-panel glass-panel-hover relative flex flex-col justify-between overflow-hidden rounded-3xl p-6 transition-all cursor-pointer group"
+      >
         {/* Header Badge & Title */}
         <div>
           <div className="flex items-start justify-between gap-3 mb-4">
@@ -94,9 +99,8 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
           </div>
 
           <h3
-            className="text-xl font-black text-white hover:text-indigo-400 cursor-pointer transition-colors line-clamp-2 leading-snug mb-3"
-            onClick={handleOpenDetail}
-            title="Click để xem chi tiết"
+            className="text-xl font-black text-white group-hover:text-indigo-400 transition-colors line-clamp-2 leading-snug mb-3"
+            title="Click vào card để xem chi tiết"
           >
             {voucher.title}
           </h3>
@@ -119,7 +123,7 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
         </div>
 
         {/* Claim Action & Feedback */}
-        <div className="mt-2 flex flex-col gap-3">
+        <div className="mt-2 flex flex-col gap-3" onClick={(e) => e.stopPropagation()}>
           {message && (
             <div
               className={`flex items-center gap-2 rounded-xl p-3 text-xs font-semibold animate-in fade-in slide-in-from-top-1 ${
@@ -140,6 +144,7 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
           {role === 'guest' ? (
             <Link
               to="/login"
+              onClick={(e) => e.stopPropagation()}
               className="flex w-full items-center justify-center gap-2 rounded-2xl border border-indigo-500/30 bg-indigo-500/10 py-3 text-sm font-bold text-indigo-300 hover:bg-indigo-500/20 transition"
             >
               <Lock size={16} />
@@ -188,7 +193,7 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
               <button
                 type="button"
                 onClick={() => setShowDetailModal(false)}
-                className="text-slate-400 hover:text-white text-sm font-bold rounded-lg p-1 hover:bg-slate-800"
+                className="text-slate-400 hover:text-white text-sm font-bold rounded-lg p-1 hover:bg-slate-800 cursor-pointer"
               >
                 ✕
               </button>
@@ -244,7 +249,7 @@ function VoucherCard({ voucher, role, onClaimed }: { voucher: Voucher; role: Rol
               <button
                 type="button"
                 onClick={() => setShowDetailModal(false)}
-                className="rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-700 transition"
+                className="rounded-xl bg-slate-800 px-5 py-2.5 text-sm font-bold text-white hover:bg-slate-700 transition cursor-pointer"
               >
                 Đóng
               </button>

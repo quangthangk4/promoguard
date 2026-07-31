@@ -11,19 +11,18 @@ export function VoucherPage({ role }: { role: Role }) {
   const [vouchersList, setVouchersList] = useState<Voucher[]>([])
   const [loading, setLoading] = useState(true)
 
-  const fetchCampaigns = async () => {
-    setLoading(true)
+  const fetchCampaigns = async (silent = false) => {
+    if (!silent) setLoading(true)
     try {
-      // Chỉ lấy các chiến dịch ACTIVE từ Backend
       const response = await api.get<{ data: CampaignResponse[] }>('/api/v1/campaigns?status=ACTIVE')
       const mapped = (response.data.data || [])
         .map(mapCampaignToVoucher)
-        .filter((v) => v.status === 'Active') // Đảm bảo đúng trong khung giờ hiệu lực
+        .filter((v) => v.status === 'Active')
       setVouchersList(mapped)
     } catch (err) {
       console.error('Failed to load campaigns', err)
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
@@ -73,7 +72,7 @@ export function VoucherPage({ role }: { role: Role }) {
           <Loader2 className="animate-spin text-indigo-400" size={36} />
         </div>
       ) : (
-        <VoucherGrid vouchers={filteredVouchers} role={role} onClaimed={fetchCampaigns} />
+        <VoucherGrid vouchers={filteredVouchers} role={role} onClaimed={() => fetchCampaigns(true)} />
       )}
     </div>
   )
